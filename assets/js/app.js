@@ -5,8 +5,27 @@
 (function () {
   "use strict";
 
-  const ALL = window.QUESTIONS || [];
+  const BUILTIN = window.QUESTIONS || [];
   const STORE_KEY = "kokushi-drill-v1";
+  const CUSTOM_KEY = "kokushi-drill-custom-v1";
+
+  /* ---------- 自作問題ストア ---------- */
+  function loadCustom() {
+    try {
+      const raw = localStorage.getItem(CUSTOM_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function saveCustom(arr) {
+    try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(arr)); } catch (e) {}
+  }
+  let customQuestions = loadCustom();
+
+  // 出題対象＝組み込み問題＋自作問題
+  function getAllQuestions() {
+    return BUILTIN.concat(customQuestions);
+  }
 
   /* ---------- 永続化（成績・要復習リスト） ---------- */
   const defaultStore = () => ({
@@ -55,24 +74,46 @@
   /* =====================================================================
    * スタート画面のセットアップ
    * ===================================================================*/
-  function initStartScreen() {
-    // 科目チップを動的生成
-    const subjects = [...new Set(ALL.map((q) => q.subject))];
-    subjects.forEach((s) => selectedSubjects.add(s));
+  function currentSubjects() {
+    return [...new Set(getAllQuestions().map((q) => q.subject))];
+  }
+
+  // 科目チップを（再）生成。新規科目は選択済み状態で追加する。
+  function renderSubjectChips() {
+    const subjects = currentSubjects();
     const box = $("#subject-filters");
+    // 初回はすべて選択、以降は既存の選択を保持しつつ新科目を有効化
+    const firstRun = box.dataset.init !== "1";
+    const known = new Set($$(".chip", box).map((c) => c.dataset.subject));
+    subjects.forEach((s) => {
+      if (firstRun || !known.has(s)) selectedSubjects.add(s);
+    });
+    // 既に存在しない科目を選択集合から除去
+    [...selectedSubjects].forEach((s) => { if (!subjects.includes(s)) selectedSubjects.delete(s); });
+
     box.innerHTML = "";
-    const allChip = el("button", "chip active", "すべて");
+    const allActive = subjects.length > 0 && subjects.every((s) => selectedSubjects.has(s));
+    const allChip = el("button", "chip" + (allActive ? " active" : ""), "すべて");
     allChip.dataset.subject = "__all__";
     box.appendChild(allChip);
     subjects.forEach((s) => {
-      const c = el("button", "chip active", escapeHtml(s));
+      const active = selectedSubjects.has(s);
+      const c = el("button", "chip" + (active ? " active" : ""), escapeHtml(s));
       c.dataset.subject = s;
       box.appendChild(c);
     });
+    box.dataset.init = "1";
+  }
+
+  function initStartScreen() {
+    renderSubjectChips();
+    const box = $("#subject-filters");
+    const allChipSel = () => $('.chip[data-subject="__all__"]', box);
 
     box.addEventListener("click", (e) => {
       const chip = e.target.closest(".chip");
       if (!chip) return;
+      const subjects = currentSubjects();
       if (chip.dataset.subject === "__all__") {
         const turnOn = !chip.classList.contains("active");
         $$(".chip", box).forEach((c) => c.classList.toggle("active", turnOn));
@@ -83,7 +124,7 @@
         const s = chip.dataset.subject;
         if (chip.classList.contains("active")) selectedSubjects.add(s);
         else selectedSubjects.delete(s);
-        allChip.classList.toggle("active", selectedSubjects.size === subjects.length);
+        allChipSel().classList.toggle("active", selectedSubjects.size === subjects.length);
       }
       updatePoolInfo();
     });
@@ -118,7 +159,7 @@
   }
 
   function getPool() {
-    let pool = ALL.filter(
+    let pool = getAllQuestions().filter(
       (q) => selectedSubjects.has(q.subject) && selectedImportance.has(q.importance)
     );
     if (mode === "review") {
@@ -482,6 +523,12 @@
       showScreen("start-screen");
     });
     $("#review-wrong-btn").addEventListener("click", reviewWrongOnly);
+    $("#open-editor-btn").addEventListener("click", openEditor);
+    $("#editor-home-btn").addEventListener("click", () => {
+      renderLifetimeStats();
+      updatePoolInfo();
+      showScreen("start-screen");
+    });
 
     // キーボード: 1-9で選択、Enterで解答/次へ
     document.addEventListener("keydown", (e) => {
@@ -498,12 +545,297 @@
     });
   }
 
+  /* =====================================================================
+   * 問題エディタ（自作問題の作成・編集・削除・入出力）
+   * ===================================================================*/
+  function initEditor() {
+    updateSubjectDatalist();
+    // 初期の選択肢行（4つ）
+    if ($$(".choice-row", $("#choices-editor")).length === 0) {
+      for (let i = 0; i < 4; i++) addChoiceRow();
+    }
+    $("#add-choice-btn").addEventListener("click", () => addChoiceRow());
+    $("#q-form").addEventListener("submit", (e) => { e.preventDefault(); saveQuestion(); });
+    $("#cancel-edit-btn").addEventListener("click", resetForm);
+    $("#export-btn").addEventListener("click", exportJSON);
+    $("#import-btn").addEventListener("click", () => $("#import-file").click());
+    $("#import-file").addEventListener("change", importJSON);
+    renderCustomList();
+  }
+
+  function updateSubjectDatalist() {
+    const dl = $("#subject-list");
+    dl.innerHTML = "";
+    currentSubjects().forEach((s) => {
+      const o = document.createElement("option");
+      o.value = s;
+      dl.appendChild(o);
+    });
+  }
+
+  function addChoiceRow(data) {
+    data = data || {};
+    const row = el("div", "choice-row");
+    row.innerHTML =
+      '<div class="cr-main">' +
+        '<input type="text" class="cr-text" placeholder="選択肢の文" />' +
+        '<input type="text" class="cr-note" placeholder="この選択肢の解説（任意）" />' +
+      '</div>' +
+      '<label class="cr-toggle"><input type="checkbox" class="cr-correct" /><span>正</span></label>' +
+      '<label class="cr-toggle forbid"><input type="checkbox" class="cr-forbid" /><span>禁忌</span></label>' +
+      '<button type="button" class="cr-del" title="この選択肢を削除">×</button>';
+    row.querySelector(".cr-text").value = data.text || "";
+    row.querySelector(".cr-note").value = data.note || "";
+    row.querySelector(".cr-correct").checked = !!data.correct;
+    row.querySelector(".cr-forbid").checked = !!data.forbidden;
+    const sync = () => {
+      row.classList.toggle("is-correct", row.querySelector(".cr-correct").checked);
+      row.classList.toggle("is-forbid", row.querySelector(".cr-forbid").checked);
+    };
+    row.querySelector(".cr-correct").addEventListener("change", sync);
+    row.querySelector(".cr-forbid").addEventListener("change", sync);
+    row.querySelector(".cr-del").addEventListener("click", () => {
+      if ($$(".choice-row", $("#choices-editor")).length <= 2) {
+        flashError("選択肢は2つ以上必要です。");
+        return;
+      }
+      row.remove();
+    });
+    sync();
+    $("#choices-editor").appendChild(row);
+  }
+
+  function flashError(msg) {
+    const box = $("#form-error");
+    box.textContent = msg;
+    box.classList.remove("hidden");
+  }
+  function clearError() { $("#form-error").classList.add("hidden"); }
+
+  function readForm() {
+    const choices = $$(".choice-row", $("#choices-editor"))
+      .map((row) => ({
+        text: row.querySelector(".cr-text").value.trim(),
+        correct: row.querySelector(".cr-correct").checked,
+        forbidden: row.querySelector(".cr-forbid").checked,
+        note: row.querySelector(".cr-note").value.trim()
+      }))
+      .filter((c) => c.text.length > 0);
+    return {
+      subject: $("#f-subject").value.trim(),
+      topic: $("#f-topic").value.trim(),
+      importance: Number($("#f-importance").value),
+      type: $("#f-type").value,
+      stem: $("#f-stem").value.trim(),
+      choices,
+      explanation: $("#f-explanation").value.trim(),
+      pearl: $("#f-pearl").value.trim()
+    };
+  }
+
+  function validate(q) {
+    if (!q.subject) return "科目を入力してください。";
+    if (!q.topic) return "テーマを入力してください。";
+    if (!q.stem) return "問題文を入力してください。";
+    if (q.choices.length < 2) return "文が入力された選択肢が2つ以上必要です。";
+    const correct = q.choices.filter((c) => c.correct).length;
+    if (correct === 0) return "正答（「正」）を少なくとも1つ指定してください。";
+    if (q.type === "single" && correct !== 1)
+      return "「1つ選べ」形式では正答はちょうど1つにしてください。";
+    if (q.type === "multiple" && correct < 2)
+      return "「複数選べ」形式では正答を2つ以上指定してください。";
+    return null;
+  }
+
+  function saveQuestion() {
+    clearError();
+    const q = readForm();
+    const err = validate(q);
+    if (err) { flashError(err); return; }
+    if (q.type === "multiple") q.pick = q.choices.filter((c) => c.correct).length;
+
+    const id = $("#f-id").value;
+    if (id) {
+      const idx = customQuestions.findIndex((c) => c.id === id);
+      if (idx >= 0) customQuestions[idx] = Object.assign({}, q, { id, custom: true });
+    } else {
+      q.id = "usr-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
+      q.custom = true;
+      customQuestions.push(q);
+    }
+    saveCustom(customQuestions);
+    afterCustomChange();
+    resetForm();
+    renderCustomList();
+    // 保存できたことを一瞬示す
+    const btn = $("#save-q-btn");
+    const orig = btn.textContent;
+    btn.textContent = "✔ 保存しました";
+    setTimeout(() => { btn.textContent = orig; }, 1400);
+  }
+
+  function editQuestion(id) {
+    const q = customQuestions.find((c) => c.id === id);
+    if (!q) return;
+    $("#editor-title").textContent = "問題を編集";
+    $("#f-id").value = q.id;
+    $("#f-subject").value = q.subject;
+    $("#f-topic").value = q.topic;
+    $("#f-importance").value = String(q.importance);
+    $("#f-type").value = q.type;
+    $("#f-stem").value = q.stem;
+    $("#f-explanation").value = q.explanation || "";
+    $("#f-pearl").value = q.pearl || "";
+    $("#choices-editor").innerHTML = "";
+    q.choices.forEach((c) => addChoiceRow(c));
+    $("#cancel-edit-btn").classList.remove("hidden");
+    clearError();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function deleteQuestion(id) {
+    if (!confirm("この問題を削除します。よろしいですか？")) return;
+    customQuestions = customQuestions.filter((c) => c.id !== id);
+    saveCustom(customQuestions);
+    afterCustomChange();
+    renderCustomList();
+    if ($("#f-id").value === id) resetForm();
+  }
+
+  function resetForm() {
+    $("#q-form").reset();
+    $("#f-id").value = "";
+    $("#editor-title").textContent = "問題を作成";
+    $("#choices-editor").innerHTML = "";
+    for (let i = 0; i < 4; i++) addChoiceRow();
+    $("#cancel-edit-btn").classList.add("hidden");
+    clearError();
+  }
+
+  // 自作問題が変化したら、科目チップ・datalist・成績表示・出題数を更新
+  function afterCustomChange() {
+    renderSubjectChips();
+    updateSubjectDatalist();
+    updatePoolInfo();
+  }
+
+  function renderCustomList() {
+    const list = $("#custom-list");
+    const empty = $("#custom-empty");
+    $("#custom-count").textContent = customQuestions.length;
+    list.innerHTML = "";
+    if (customQuestions.length === 0) {
+      empty.classList.remove("hidden");
+      $("#export-btn").disabled = true;
+      return;
+    }
+    empty.classList.add("hidden");
+    $("#export-btn").disabled = false;
+    customQuestions.forEach((q) => {
+      const forbidCount = q.choices.filter((c) => c.forbidden).length;
+      const item = el("li", "custom-item");
+      item.innerHTML =
+        '<div class="ci-body">' +
+          '<div class="ci-title">' + escapeHtml(q.topic || "(無題)") + "</div>" +
+          '<div class="ci-sub">' + escapeHtml(q.subject) + " ・ " +
+            "★".repeat(q.importance) +
+            (forbidCount ? ' ・ <span class="ci-forbid">禁忌肢' + forbidCount + "</span>" : "") +
+          "</div>" +
+        "</div>" +
+        '<div class="ci-actions">' +
+          '<button class="btn ghost small" data-act="edit">編集</button>' +
+          '<button class="btn ghost small" data-act="del">削除</button>' +
+        "</div>";
+      item.querySelector('[data-act="edit"]').addEventListener("click", () => editQuestion(q.id));
+      item.querySelector('[data-act="del"]').addEventListener("click", () => deleteQuestion(q.id));
+      list.appendChild(item);
+    });
+  }
+
+  function exportJSON() {
+    if (customQuestions.length === 0) return;
+    const blob = new Blob([JSON.stringify(customQuestions, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "kokushi-questions-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function importJSON(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        const arr = Array.isArray(data) ? data : [data];
+        let added = 0;
+        arr.forEach((raw) => {
+          const q = sanitizeImported(raw);
+          if (!q) return;
+          // ID重複は新規採番
+          if (!q.id || customQuestions.some((c) => c.id === q.id)) {
+            q.id = "usr-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
+          }
+          q.custom = true;
+          customQuestions.push(q);
+          added++;
+        });
+        saveCustom(customQuestions);
+        afterCustomChange();
+        renderCustomList();
+        alert(added > 0 ? added + " 問を読み込みました。" : "読み込める問題が見つかりませんでした。");
+      } catch (err) {
+        alert("JSONの読み込みに失敗しました：" + err.message);
+      }
+      e.target.value = "";
+    };
+    reader.readAsText(file);
+  }
+
+  // インポート時の最低限の検証・整形
+  function sanitizeImported(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const q = {
+      subject: String(raw.subject || "").trim() || "その他",
+      topic: String(raw.topic || "").trim() || "(無題)",
+      importance: [1, 2, 3].includes(Number(raw.importance)) ? Number(raw.importance) : 2,
+      type: raw.type === "multiple" ? "multiple" : "single",
+      stem: String(raw.stem || "").trim(),
+      explanation: String(raw.explanation || "").trim(),
+      pearl: String(raw.pearl || "").trim(),
+      choices: Array.isArray(raw.choices) ? raw.choices.map((c) => ({
+        text: String(c && c.text || "").trim(),
+        correct: !!(c && c.correct),
+        forbidden: !!(c && c.forbidden),
+        note: String(c && c.note || "").trim()
+      })).filter((c) => c.text) : []
+    };
+    if (raw.id) q.id = String(raw.id);
+    // 妥当な問題のみ採用
+    if (!q.stem || q.choices.length < 2 || !q.choices.some((c) => c.correct)) return null;
+    if (q.type === "multiple") q.pick = q.choices.filter((c) => c.correct).length;
+    return q;
+  }
+
+  function openEditor() {
+    resetForm();
+    renderCustomList();
+    updateSubjectDatalist();
+    showScreen("editor-screen");
+  }
+
   /* ---------- 起動 ---------- */
-  if (ALL.length === 0) {
+  if (getAllQuestions().length === 0) {
     document.body.innerHTML =
       '<p style="padding:40px;text-align:center">問題データを読み込めませんでした。</p>';
     return;
   }
   initStartScreen();
+  initEditor();
   bindGlobal();
 })();

@@ -61,6 +61,7 @@
 
         <p id="pool-info" class="pool-info"></p>
         <button id="start-btn" class="btn primary big">開始する</button>
+        <button id="open-editor-btn" class="btn ghost big" style="margin-top:10px">＋ 自分の問題を作成・管理</button>
       </div>
 
       <div class="card stats-card">
@@ -117,6 +118,91 @@
         </div>
       </div>
     </section>
+    <!-- ========== 問題エディタ画面 ========== -->
+    <section id="editor-screen" class="screen hidden">
+      <div class="card">
+        <div class="editor-head">
+          <h2 id="editor-title">問題を作成</h2>
+          <button id="editor-home-btn" class="btn ghost small">← 設定に戻る</button>
+        </div>
+
+        <form id="q-form" novalidate>
+          <input type="hidden" id="f-id" />
+
+          <div class="field row">
+            <label class="grow">科目
+              <input type="text" id="f-subject" list="subject-list" placeholder="例：循環器" required />
+              <datalist id="subject-list"></datalist>
+            </label>
+            <label class="grow">テーマ
+              <input type="text" id="f-topic" placeholder="例：気管支喘息と降圧薬" required />
+            </label>
+          </div>
+
+          <div class="field row">
+            <label>重要度
+              <select id="f-importance">
+                <option value="3">必修級 ★★★</option>
+                <option value="2" selected>頻出 ★★</option>
+                <option value="1">標準 ★</option>
+              </select>
+            </label>
+            <label>選択形式
+              <select id="f-type">
+                <option value="single">1つ選べ（正答は1つ）</option>
+                <option value="multiple">複数選べ（正答を複数指定）</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="field">
+            <label class="block">問題文
+              <textarea id="f-stem" rows="3" placeholder="症例・設問を入力" required></textarea>
+            </label>
+          </div>
+
+          <div class="field">
+            <label class="block">選択肢
+              <span class="hint">「正」＝正答 ／ 「禁忌」＝選ぶと不合格級の禁忌肢。少なくとも1つは正答に。</span>
+            </label>
+            <div id="choices-editor" class="choices-editor"></div>
+            <button type="button" id="add-choice-btn" class="btn ghost small">＋ 選択肢を追加</button>
+          </div>
+
+          <div class="field">
+            <label class="block">解説
+              <textarea id="f-explanation" rows="2" placeholder="全体の解説"></textarea>
+            </label>
+          </div>
+
+          <div class="field">
+            <label class="block">ワンポイント（任意）
+              <input type="text" id="f-pearl" placeholder="例：【禁忌】喘息 × 非選択的β遮断薬" />
+            </label>
+          </div>
+
+          <p id="form-error" class="form-error hidden"></p>
+          <div class="q-actions">
+            <button type="submit" id="save-q-btn" class="btn primary">保存する</button>
+            <button type="button" id="cancel-edit-btn" class="btn ghost hidden">編集をやめる</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="editor-head">
+          <h2>自作の問題（<span id="custom-count">0</span>）</h2>
+          <div class="io-btns">
+            <button id="export-btn" class="btn ghost small">JSONで書き出し</button>
+            <button id="import-btn" class="btn ghost small">読み込み</button>
+            <input type="file" id="import-file" accept="application/json,.json" hidden />
+          </div>
+        </div>
+        <ul id="custom-list" class="custom-list"></ul>
+        <p id="custom-empty" class="pool-info">まだ自作の問題はありません。上のフォームから追加できます。</p>
+      </div>
+    </section>
+
   </main>
 
   <footer class="app-footer wrap">

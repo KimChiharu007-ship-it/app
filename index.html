@@ -102,6 +102,32 @@
           <button id="quit-btn" class="btn ghost small">中断</button>
         </div>
       </article>
+
+      <section id="sketch-card" class="card sketch-card">
+        <div class="sketch-head">
+          <h3>手書きメモ<span class="sketch-hint">Apple Pencil / タッチ / マウス対応</span></h3>
+          <button id="sketch-toggle" class="btn ghost small">メモを隠す</button>
+        </div>
+        <div id="sketch-body">
+          <div class="sketch-tools">
+            <div class="tool-group">
+              <button class="tool active" data-tool="pen" title="ペン">✏️ ペン</button>
+              <button class="tool" data-tool="eraser" title="消しゴム">◭ 消しゴム</button>
+            </div>
+            <div class="tool-group colors" id="pen-colors"></div>
+            <label class="tool-group size-group">太さ
+              <input type="range" id="pen-size" min="1" max="14" value="3" />
+            </label>
+            <div class="tool-group">
+              <button id="undo-btn" class="btn ghost small" title="元に戻す">↶ 戻す</button>
+              <button id="clear-btn" class="btn ghost small" title="全消し">全消し</button>
+            </div>
+          </div>
+          <div class="canvas-wrap" id="canvas-wrap">
+            <canvas id="sketch-canvas"></canvas>
+          </div>
+        </div>
+      </section>
     </section>
 
     <!-- ========== 結果画面 ========== -->

@@ -256,6 +256,9 @@
     $("#submit-btn").classList.remove("hidden");
     $("#submit-btn").disabled = true;
     $("#next-btn").classList.add("hidden");
+
+    // 手書きメモをこの問題用に切り替え
+    Sketch.setQuestion(q.id);
   }
 
   function toggleChoice(li, shape) {
@@ -829,6 +832,197 @@
     showScreen("editor-screen");
   }
 
+  /* =====================================================================
+   * 手書きメモ（Apple Pencil / タッチ / マウス）
+   * ---------------------------------------------------------------------
+   * ・Pointer Events を使用し、ペンの筆圧で線の太さを変える
+   * ・ペン使用を検知したらタッチ入力は無視（パームリジェクション）
+   * ・描画は問題IDごとに localStorage へベクター（点列）で保存
+   * ===================================================================*/
+  const SKETCH_KEY = "kokushi-drill-sketch-v1";
+  const Sketch = (function () {
+    let canvas, ctx, wrap;
+    let dpr = 1;
+    let strokes = [];      // 現在の問題のストローク
+    let current = null;    // 描画中のストローク
+    let qid = null;
+    let store = {};        // qid -> strokes
+    let tool = "pen";
+    let color = "#1b2333";
+    let size = 3;
+    let penSeen = false;   // パームリジェクション用
+    let drawing = false;
+    let activeId = null;
+
+    const COLORS = ["#1b2333", "#2563eb", "#dc2626", "#16a34a", "#d97706"];
+
+    function loadStore() {
+      try { store = JSON.parse(localStorage.getItem(SKETCH_KEY) || "{}") || {}; }
+      catch (e) { store = {}; }
+    }
+    function persist() {
+      try {
+        if (qid == null) return;
+        if (strokes.length) store[qid] = strokes; else delete store[qid];
+        localStorage.setItem(SKETCH_KEY, JSON.stringify(store));
+      } catch (e) {}
+    }
+
+    function ptFromEvent(e) {
+      const r = canvas.getBoundingClientRect();
+      const p = e.pointerType === "pen" ? (e.pressure > 0 ? e.pressure : 0.4) : 0.6;
+      return { x: e.clientX - r.left, y: e.clientY - r.top, p };
+    }
+
+    function lineWidthFor(s, p) {
+      const mult = s.tool === "eraser" ? 3.2 : (0.4 + 1.3 * (p != null ? p : 0.5));
+      return Math.max(0.6, s.size * mult);
+    }
+
+    function drawStroke(s) {
+      const pts = s.points;
+      if (!pts || pts.length === 0) return;
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      if (s.tool === "eraser") {
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.strokeStyle = ctx.fillStyle = "rgba(0,0,0,1)";
+      } else {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = ctx.fillStyle = s.color;
+      }
+      if (pts.length === 1) {
+        const p = pts[0];
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, lineWidthFor(s, p.p) / 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1], b = pts[i];
+          ctx.beginPath();
+          ctx.lineWidth = lineWidthFor(s, b.p);
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    function redraw() {
+      if (!ctx) return;
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      strokes.forEach(drawStroke);
+      if (current) drawStroke(current);
+    }
+
+    function resize() {
+      if (!canvas || !wrap) return;
+      const r = wrap.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return; // 非表示時はスキップ
+      dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(r.width * dpr);
+      canvas.height = Math.round(r.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      redraw();
+    }
+
+    function onDown(e) {
+      if (e.pointerType === "pen") penSeen = true;
+      if (e.pointerType === "touch" && penSeen) return; // パームリジェクション
+      if (drawing) return;
+      drawing = true;
+      activeId = e.pointerId;
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+      current = { tool, color, size, points: [ptFromEvent(e)] };
+      redraw();
+      e.preventDefault();
+    }
+    function onMove(e) {
+      if (!drawing || e.pointerId !== activeId) return;
+      if (e.pointerType === "touch" && penSeen) return;
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+      (evs.length ? evs : [e]).forEach((ev) => current.points.push(ptFromEvent(ev)));
+      redraw();
+      e.preventDefault();
+    }
+    function onUp(e) {
+      if (!drawing || e.pointerId !== activeId) return;
+      drawing = false;
+      activeId = null;
+      try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (current && current.points.length) strokes.push(current);
+      current = null;
+      redraw();
+      persist();
+    }
+
+    function setTool(t) {
+      tool = t;
+      $$("#sketch-card .tool").forEach((b) => b.classList.toggle("active", b.dataset.tool === t));
+    }
+    function setColor(c) {
+      color = c;
+      if (tool === "eraser") setTool("pen");
+      $$("#pen-colors .swatch").forEach((s) => s.classList.toggle("active", s.dataset.color === c));
+    }
+
+    function init() {
+      canvas = $("#sketch-canvas");
+      wrap = $("#canvas-wrap");
+      if (!canvas) return;
+      ctx = canvas.getContext("2d");
+      loadStore();
+
+      // カラースウォッチ生成
+      const cbox = $("#pen-colors");
+      COLORS.forEach((c, i) => {
+        const b = el("button", "swatch" + (i === 0 ? " active" : ""));
+        b.type = "button";
+        b.style.background = c;
+        b.dataset.color = c;
+        b.title = "色";
+        b.addEventListener("click", () => setColor(c));
+        cbox.appendChild(b);
+      });
+
+      $$("#sketch-card .tool").forEach((b) =>
+        b.addEventListener("click", () => setTool(b.dataset.tool)));
+      $("#pen-size").addEventListener("input", (e) => { size = Number(e.target.value); });
+      $("#undo-btn").addEventListener("click", () => { strokes.pop(); redraw(); persist(); });
+      $("#clear-btn").addEventListener("click", () => {
+        if (strokes.length && !confirm("このメモを全て消去しますか？")) return;
+        strokes = []; redraw(); persist();
+      });
+      $("#sketch-toggle").addEventListener("click", () => {
+        const body = $("#sketch-body");
+        const hidden = body.classList.toggle("collapsed");
+        $("#sketch-toggle").textContent = hidden ? "メモを表示" : "メモを隠す";
+        if (!hidden) resize();
+      });
+
+      canvas.addEventListener("pointerdown", onDown);
+      canvas.addEventListener("pointermove", onMove);
+      canvas.addEventListener("pointerup", onUp);
+      canvas.addEventListener("pointercancel", onUp);
+      canvas.addEventListener("pointerleave", onUp);
+      window.addEventListener("resize", resize);
+    }
+
+    function setQuestion(id) {
+      qid = id;
+      strokes = store[id] ? JSON.parse(JSON.stringify(store[id])) : [];
+      current = null;
+      resize(); // サイズ確定＋再描画
+    }
+
+    return { init, setQuestion, resize };
+  })();
+
   /* ---------- 起動 ---------- */
   if (getAllQuestions().length === 0) {
     document.body.innerHTML =
@@ -837,5 +1031,6 @@
   }
   initStartScreen();
   initEditor();
+  Sketch.init();
   bindGlobal();
 })();

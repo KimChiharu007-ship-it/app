@@ -1,0 +1,10 @@
+{
+  "name": "kokushi-drill",
+  "version": "0.1.0",
+  "private": true,
+  "description": "医師国家試験の重要問題と禁忌選択肢を鍛える練習アプリ（ビルド不要の静的Webアプリ）",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "serve": "python3 -m http.server 8080"
+  }
+}

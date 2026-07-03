@@ -52,16 +52,16 @@ window.QUESTIONS = [
     topic: "WPW症候群 + 心房細動",
     importance: 2,
     type: "single",
-    stem: "WPW症候群の患者が心房細動を発症し、幅広いQRSの頻拍を呈している。避けるべき薬剤はどれか。1つ選べ。",
+    stem: "WPW症候群に心房細動を合併し、幅広いQRSの頻拍を呈している（血行動態は安定）。薬物治療として適切なものはどれか。1つ選べ。",
     choices: [
       { text: "ジゴキシン", correct: false, forbidden: true,
         note: "房室結節を抑制し副伝導路優位となり、心室細動へ移行させうる。WPW+Afでは禁忌。" },
       { text: "プロカインアミド", correct: true, forbidden: false,
-        note: "副伝導路の伝導を抑制でき、WPW+Afの薬物治療として妥当。" },
-      { text: "ベラパミル", correct: false, forbidden: false,
-        note: "房室結節抑制薬でありWPW+Afでは避ける（危険側）。" },
-      { text: "電気的除細動（血行動態不安定時）", correct: false, forbidden: false,
-        note: "不安定なら第一選択。設問は『避けるべき薬剤』を問う。" }
+        note: "副伝導路の伝導を抑制でき、WPW+Afの薬物治療として妥当。正答。" },
+      { text: "ベラパミル", correct: false, forbidden: true,
+        note: "房室結節抑制薬で副伝導路優位を招き、WPW+Afでは危険。禁忌側。" },
+      { text: "電気的除細動", correct: false, forbidden: false,
+        note: "血行動態が不安定なら第一選択。本問は安定例での薬物治療を問う。" }
     ],
     explanation: "WPW症候群に合併した心房細動では、房室結節を抑制する薬（ジギタリス・ベラパミル・βブロッカー）は副伝導路を介した心室応答を増悪させ心室細動を誘発しうる。",
     pearl: "【禁忌】WPW + Af に房室結節抑制薬（ジギタリス・Ca拮抗薬）。"
@@ -91,12 +91,12 @@ window.QUESTIONS = [
     importance: 3,
     type: "multiple",
     pick: 2,
-    stem: "妊娠中の投与が禁忌となる薬剤はどれか。2つ選べ。",
+    stem: "妊娠中の投与が禁忌となる薬剤はどれか。2つ選べ。（＝禁忌に当たるものを選ぶ設問）",
     choices: [
-      { text: "ワルファリン", correct: true, forbidden: true,
-        note: "胎盤を通過し胎児ワルファリン症候群・出血を起こす。妊娠中は原則ヘパリンに変更。" },
-      { text: "エナラプリル（ACE阻害薬）", correct: true, forbidden: true,
-        note: "胎児の腎障害・羊水過少・頭蓋形成不全。妊娠中（特に中後期）禁忌。" },
+      { text: "ワルファリン", correct: true, forbidden: false,
+        note: "胎盤を通過し胎児ワルファリン症候群・出血を起こす。妊娠中は原則ヘパリンに変更。これが正答。" },
+      { text: "エナラプリル（ACE阻害薬）", correct: true, forbidden: false,
+        note: "胎児の腎障害・羊水過少・頭蓋形成不全。妊娠中（特に中後期）禁忌。これも正答。" },
       { text: "メチルドパ", correct: false, forbidden: false, note: "妊娠高血圧で使用される安全性の高い降圧薬。" },
       { text: "インスリン", correct: false, forbidden: false, note: "妊娠糖尿病でも安全に使用できる。" }
     ],
@@ -109,13 +109,13 @@ window.QUESTIONS = [
     topic: "消化管穿孔の疑いと造影",
     importance: 2,
     type: "single",
-    stem: "上部消化管穿孔が疑われる患者に消化管造影を行う。使用してはならない造影剤はどれか。1つ選べ。",
+    stem: "上部消化管穿孔が疑われる患者に消化管造影を行う。用いるべき造影剤はどれか。1つ選べ。",
     choices: [
       { text: "硫酸バリウム", correct: false, forbidden: true,
         note: "穿孔部から腹腔内へ漏れると重篤なバリウム腹膜炎を起こす。穿孔（疑い）では禁忌。" },
       { text: "水溶性造影剤（ガストログラフィン）", correct: true, forbidden: false,
-        note: "漏出しても吸収され、穿孔疑い例で選択される。" },
-      { text: "造影を行わずCTで評価", correct: false, forbidden: false, note: "妥当な代替だが設問は造影剤の可否を問う。" },
+        note: "漏出しても吸収され、穿孔疑い例で選択される。正答。" },
+      { text: "造影を行わず様子を見る", correct: false, forbidden: false, note: "評価を怠るのは不適切。" },
       { text: "生理食塩水", correct: false, forbidden: false, note: "造影剤ではない。" }
     ],
     explanation: "消化管穿孔（疑い）・腸閉塞では硫酸バリウムは禁忌。漏出時のバリウム腹膜炎、あるいはバリウムイレウスを招く。水溶性造影剤を用いる。",
@@ -147,12 +147,12 @@ window.QUESTIONS = [
     topic: "ジギタリス中毒",
     importance: 2,
     type: "single",
-    stem: "ジギタリス中毒による不整脈と高カリウム血症を認める患者。避けるべき治療はどれか。1つ選べ。",
+    stem: "ジギタリス中毒による不整脈と高カリウム血症を認める患者。適切な治療はどれか。1つ選べ。",
     choices: [
       { text: "カルシウム製剤の静注", correct: false, forbidden: true,
-        note: "ジギタリス中毒に高用量Ca静注は『stone heart』（強直性収縮）を招くとされ避ける。" },
+        note: "ジギタリス中毒に高用量Ca静注は『stone heart』（強直性収縮）を招くとされ避ける。禁忌側。" },
       { text: "ジギタリス特異的抗体（Fab）", correct: true, forbidden: false,
-        note: "重症ジギタリス中毒の特異的治療。" },
+        note: "重症ジギタリス中毒の特異的治療。正答。" },
       { text: "カリウム値の補正・モニタリング", correct: false, forbidden: false, note: "適切な支持療法。" },
       { text: "不整脈に対する対症療法", correct: false, forbidden: false, note: "必要に応じ行う。" }
     ],
@@ -167,8 +167,8 @@ window.QUESTIONS = [
     type: "single",
     stem: "重症筋無力症の患者。神経筋伝達を悪化させ、症状を増悪させうる薬剤はどれか。1つ選べ。",
     choices: [
-      { text: "アミノグリコシド系抗菌薬", correct: true, forbidden: true,
-        note: "神経筋接合部の伝達を抑制し筋力低下・呼吸抑制を悪化させる。重症筋無力症では避ける。" },
+      { text: "アミノグリコシド系抗菌薬", correct: true, forbidden: false,
+        note: "神経筋接合部の伝達を抑制し筋力低下・呼吸抑制を悪化させる。重症筋無力症では避ける。これが正答（＝増悪させる薬）。" },
       { text: "ピリドスチグミン", correct: false, forbidden: false, note: "コリンエステラーゼ阻害薬で治療薬。" },
       { text: "アセトアミノフェン", correct: false, forbidden: false, note: "神経筋伝達への影響はない。" },
       { text: "経口補水", correct: false, forbidden: false, note: "問題ない。" }
@@ -222,8 +222,8 @@ window.QUESTIONS = [
     type: "single",
     stem: "インフルエンザ罹患中の6歳児。発熱に対する解熱薬として避けるべきものはどれか。1つ選べ。",
     choices: [
-      { text: "アスピリン", correct: true, forbidden: true,
-        note: "小児のウイルス感染（インフルエンザ・水痘）でReye症候群のリスク。原則使用しない。" },
+      { text: "アスピリン", correct: true, forbidden: false,
+        note: "小児のウイルス感染（インフルエンザ・水痘）でReye症候群のリスク。原則使用しない。これが正答（＝避けるべき薬）。" },
       { text: "アセトアミノフェン", correct: false, forbidden: false, note: "小児の解熱に安全な第一選択。" },
       { text: "冷却などの対症的ケア", correct: false, forbidden: false, note: "問題ない。" },
       { text: "十分な水分補給", correct: false, forbidden: false, note: "適切。" }
@@ -257,8 +257,8 @@ window.QUESTIONS = [
     type: "single",
     stem: "非選択的MAO阻害薬を服用中の患者。併用で高血圧クリーゼやセロトニン症候群の危険が高い組み合わせはどれか。1つ選べ。",
     choices: [
-      { text: "ペチジン（メペリジン）などの一部オピオイド／SSRIとの併用", correct: true, forbidden: true,
-        note: "MAO阻害薬との併用でセロトニン症候群・高血圧クリーゼを招く。併用禁忌。" },
+      { text: "ペチジン（メペリジン）などの一部オピオイド／SSRIとの併用", correct: true, forbidden: false,
+        note: "MAO阻害薬との併用でセロトニン症候群・高血圧クリーゼを招く。併用禁忌。これが正答（＝危険な組み合わせ）。" },
       { text: "アセトアミノフェン単剤", correct: false, forbidden: false, note: "相互作用の懸念は低い。" },
       { text: "生理食塩水輸液", correct: false, forbidden: false, note: "問題ない。" },
       { text: "外用保湿剤", correct: false, forbidden: false, note: "無関係。" }

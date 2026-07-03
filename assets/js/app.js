@@ -301,27 +301,30 @@
     const selectedIdx = $$(".choice.selected", list).map((c) => Number(c.dataset.i));
     const correctIdx = q.choices.map((c, i) => (c.correct ? i : -1)).filter((i) => i >= 0);
 
-    const pickedForbidden = selectedIdx.some((i) => q.choices[i].forbidden);
+    // 禁忌肢は「誤答かつ危険な選択肢」。正答に付いた禁忌フラグは禁忌ヒットにしない
+    // （例：「禁忌はどれか」で禁忌＝正答となる設問で、正しく選んでも減点しない）。
+    const isForbiddenTrap = (c) => c.forbidden && !c.correct;
+    const pickedForbidden = selectedIdx.some((i) => isForbiddenTrap(q.choices[i]));
     const isCorrect =
       selectedIdx.length === correctIdx.length &&
       selectedIdx.every((i) => correctIdx.includes(i));
 
-    // 選択肢の色付け
+    // 選択肢の色付け（正答は常に緑を優先）
     list.classList.add("answered");
     $$(".choice", list).forEach((li) => {
       const i = Number(li.dataset.i);
       const c = q.choices[i];
       const picked = selectedIdx.includes(i);
-      if (c.forbidden && picked) {
+      if (c.correct) {
+        li.classList.add("is-correct");
+      } else if (isForbiddenTrap(c) && picked) {
         li.classList.add("is-forbidden");
         li.querySelector(".text").insertAdjacentHTML("afterend", ' <span class="flag">禁忌</span>');
-      } else if (c.correct) {
-        li.classList.add("is-correct");
       } else if (picked) {
         li.classList.add("is-wrong");
       }
-      // 禁忌だが未選択の場合も注意喚起（本番の学びのため薄く印）
-      if (c.forbidden && !picked) {
+      // 禁忌トラップだが未選択の場合、学びのため薄く印
+      if (isForbiddenTrap(c) && !picked) {
         li.querySelector(".text").insertAdjacentHTML("afterend", ' <span class="flag" style="background:#9ca3af">禁忌肢</span>');
       }
     });
@@ -730,6 +733,8 @@
     if (q.choices.length < 2) return "文が入力された選択肢が2つ以上必要です。";
     const correct = q.choices.filter((c) => c.correct).length;
     if (correct === 0) return "正答（「正」）を少なくとも1つ指定してください。";
+    if (q.choices.some((c) => c.correct && c.forbidden))
+      return "同じ選択肢に「正」と「禁忌」は同時に付けられません。禁忌は誤答の選択肢に付けてください（『禁忌はどれか』のように禁忌が正答となる設問では、その肢は「正」だけにします）。";
     if (q.type === "single" && correct !== 1)
       return "「1つ選べ」形式では正答はちょうど1つにしてください。";
     if (q.type === "multiple" && correct < 2)
@@ -933,7 +938,8 @@
       choices: Array.isArray(raw.choices) ? raw.choices.map((c) => ({
         text: String(c && c.text || "").trim(),
         correct: !!(c && c.correct),
-        forbidden: !!(c && c.forbidden),
+        // 正答に禁忌は付けない（禁忌は誤答の危険肢のみ）
+        forbidden: !!(c && c.forbidden) && !(c && c.correct),
         note: String(c && c.note || "").trim()
       })).filter((c) => c.text) : []
     };
@@ -1042,10 +1048,12 @@
     const forbSet = parseLabels(forbiddenRaw);
     let choices = [];
     for (let i = 0; i <= maxIdx; i++) {
+      const isCorrect = answerSet.indexOf(i) >= 0;
       choices.push({
         text: (choiceMap[i] || "").trim(),
-        correct: answerSet.indexOf(i) >= 0,
-        forbidden: forbSet.indexOf(i) >= 0,
+        correct: isCorrect,
+        // 正答に禁忌は付けない（禁忌は誤答の危険肢のみ）
+        forbidden: forbSet.indexOf(i) >= 0 && !isCorrect,
         note: ""
       });
     }

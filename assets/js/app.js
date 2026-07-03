@@ -1252,6 +1252,8 @@
     let store = {};
     let penSeen = false;
     let drawing = false;
+    let erasing = false;       // オブジェクト消しゴム動作中
+    let eraserCursor = null;   // 消しゴムの位置インジケータ {x,y,r}
     let activeId = null;
     let lastEnd = 0;
 
@@ -1274,6 +1276,36 @@
     function lineWidthFor(s, p) {
       const mult = s.tool === "eraser" ? 3.2 : (0.4 + 1.3 * (p != null ? p : 0.5));
       return Math.max(0.6, s.size * mult);
+    }
+
+    // オブジェクト消しゴム：触れたストロークを丸ごと削除する
+    function eraserRadius() { return Math.max(12, penSettings.size * 3); }
+    function distPt(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+    function segDist(a, b, p) {
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy;
+      if (len2 === 0) return distPt(a, p);
+      let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+    }
+    function strokeHit(s, pt, r) {
+      const pts = s.points;
+      const pad = r + (s.size || 1) / 2;
+      if (pts.length === 1) return distPt(pts[0], pt) <= pad;
+      for (let i = 1; i < pts.length; i++) {
+        if (segDist(pts[i - 1], pts[i], pt) <= pad) return true;
+      }
+      return false;
+    }
+    function eraseAt(pt) {
+      const r = eraserRadius();
+      let removed = false;
+      strokes = strokes.filter((s) => {
+        if (strokeHit(s, pt, r)) { removed = true; return false; }
+        return true;
+      });
+      return removed;
     }
     function drawStroke(s) {
       const pts = s.points;
@@ -1313,6 +1345,18 @@
       ctx.restore();
       strokes.forEach(drawStroke);
       if (current) drawStroke(current);
+      if (eraserCursor) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(eraserCursor.x, eraserCursor.y, eraserCursor.r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(140,140,150,0.18)";
+        ctx.strokeStyle = "rgba(90,90,100,0.9)";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
     }
     function resize() {
       // canvas は置換要素で inset:0 では伸びないため、計測用要素からCSSサイズを明示指定する
@@ -1345,7 +1389,15 @@
       drawing = true;
       activeId = e.pointerId;
       try { target.setPointerCapture(e.pointerId); } catch (_) {}
-      current = { tool: penSettings.tool, color: penSettings.color, size: penSettings.size, points: [ptFromEvent(e)] };
+      const pt = ptFromEvent(e);
+      if (penSettings.tool === "eraser") {
+        erasing = true;
+        eraserCursor = { x: pt.x, y: pt.y, r: eraserRadius() };
+        eraseAt(pt);
+      } else {
+        erasing = false;
+        current = { tool: "pen", color: penSettings.color, size: penSettings.size, points: [pt] };
+      }
       redraw();
       e.preventDefault();
     }
@@ -1353,7 +1405,11 @@
       if (!drawing || e.pointerId !== activeId) return;
       if (e.pointerType === "touch" && penSeen) return;
       const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-      (evs.length ? evs : [e]).forEach((ev) => current.points.push(ptFromEvent(ev)));
+      (evs.length ? evs : [e]).forEach((ev) => {
+        const pt = ptFromEvent(ev);
+        if (erasing) { eraserCursor = { x: pt.x, y: pt.y, r: eraserRadius() }; eraseAt(pt); }
+        else current.points.push(pt);
+      });
       redraw();
       e.preventDefault();
     }
@@ -1363,7 +1419,12 @@
       activeId = null;
       lastEnd = Date.now();
       try { target.releasePointerCapture(e.pointerId); } catch (_) {}
-      if (current && current.points.length) strokes.push(current);
+      if (erasing) {
+        erasing = false;
+        eraserCursor = null;
+      } else if (current && current.points.length) {
+        strokes.push(current);
+      }
       current = null;
       redraw();
       persist();
@@ -1389,7 +1450,8 @@
         strokes = []; redraw(); persist();
       },
       hasInk() { return strokes.length > 0; },
-      justDrew() { return Date.now() - lastEnd < 250; }
+      justDrew() { return Date.now() - lastEnd < 250; },
+      isDrawing() { return drawing; }
     };
   }
 
@@ -1451,6 +1513,13 @@
         if (memoPad) memoPad.resize();
         if (choicePad) choicePad.resize();
       });
+
+      // 描画中（ペン/指）だけスクロールを止める。描いていない指のスクロールは維持。
+      document.addEventListener("touchmove", (e) => {
+        if ((choicePad && choicePad.isDrawing()) || (memoPad && memoPad.isDrawing())) {
+          e.preventDefault();
+        }
+      }, { passive: false });
 
       // キャンバス上の大きな「ペン⇄消しゴム」トグル
       $("#tool-toggle").addEventListener("click", toggleTool);

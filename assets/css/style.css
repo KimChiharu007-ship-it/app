@@ -305,6 +305,7 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; fo
 .feedback.forbidden { background: var(--forbid-bg); border-color: var(--forbid-line); }
 .feedback .verdict { font-weight: 800; font-size: 1.02rem; display: block; margin-bottom: 6px; }
 .feedback .pearl { margin-top: 10px; font-weight: 600; color: var(--forbid); }
+.feedback .src { margin-top: 8px; font-size: .8rem; color: var(--ink-soft); }
 .feedback.correct .pearl { color: #14532d; }
 
 .q-actions { display: flex; gap: 10px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
@@ -434,6 +435,31 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; fo
 .choice-row.is-correct.is-forbid { border-color: var(--forbid-line); background: var(--forbid-bg); }
 
 .form-error { color: var(--ng); font-weight: 600; font-size: .9rem; background: var(--ng-bg); padding: 10px 12px; border-radius: 8px; }
+
+/* 一括貼り付け取り込み */
+#bulk-text {
+  width: 100%;
+  font: inherit;
+  font-size: .92rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  resize: vertical;
+  margin: 8px 0 6px;
+}
+#bulk-subject { max-width: 260px; }
+.bulk-help { margin: 4px 0 12px; }
+.bulk-help summary { cursor: pointer; font-weight: 600; font-size: .85rem; color: var(--primary); margin-bottom: 8px; }
+.bulk-help pre {
+  background: var(--bg);
+  padding: 12px 14px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: .8rem;
+  line-height: 1.6;
+  white-space: pre;
+}
+.bulk-warn { color: #b45309; background: #fff4e0; font-weight: 600; font-size: .85rem; padding: 10px 12px; border-radius: 8px; }
 
 .custom-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .custom-item { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }

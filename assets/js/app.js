@@ -383,8 +383,9 @@
     else verdict = "✘ 不正解";
 
     let html = `<span class="verdict">${verdict}</span>`;
-    html += `<div class="exp">${escapeHtml(q.explanation)}</div>`;
+    if (q.explanation) html += `<div class="exp">${escapeHtml(q.explanation)}</div>`;
     if (q.pearl) html += `<div class="pearl">💡 ${escapeHtml(q.pearl)}</div>`;
+    if (q.source) html += `<div class="src">出典：${escapeHtml(q.source)}</div>`;
     fb.innerHTML = html;
     fb.classList.remove("hidden");
   }
@@ -597,6 +598,7 @@
     });
     $("#f-image-remove").addEventListener("click", () => setFormImage(null));
 
+    initBulkImport();
     renderCustomList();
   }
 
@@ -745,7 +747,12 @@
     const id = $("#f-id").value;
     if (id) {
       const idx = customQuestions.findIndex((c) => c.id === id);
-      if (idx >= 0) customQuestions[idx] = Object.assign({}, q, { id, custom: true });
+      if (idx >= 0) {
+        // フォームに無い項目（出典など）は既存の値を保持
+        const prev = customQuestions[idx];
+        if (prev.source && !q.source) q.source = prev.source;
+        customQuestions[idx] = Object.assign({}, q, { id, custom: true });
+      }
     } else {
       q.id = "usr-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
       q.custom = true;
@@ -920,6 +927,7 @@
       stem: String(raw.stem || "").trim(),
       image: typeof raw.image === "string" ? raw.image : "",
       imageAlt: String(raw.imageAlt || "").trim(),
+      source: String(raw.source || "").trim(),
       explanation: String(raw.explanation || "").trim(),
       pearl: String(raw.pearl || "").trim(),
       choices: Array.isArray(raw.choices) ? raw.choices.map((c) => ({
@@ -935,6 +943,242 @@
     if (q.type === "multiple") q.pick = q.choices.filter((c) => c.correct).length;
     return q;
   }
+
+  /* =====================================================================
+   * 一括貼り付け取り込み
+   * ---------------------------------------------------------------------
+   * 問題文・選択肢・正答をまとめて貼り付けて複数問を生成する。
+   * 取り込んだ問題は customQuestions（localStorage）にのみ入り、
+   * リポジトリには一切書き込まれない（私的利用向け）。
+   * ===================================================================*/
+  let bulkParsed = [];
+
+  function labelToIndex(ch) {
+    if (!ch) return -1;
+    let i;
+    i = "abcde".indexOf(ch.toLowerCase()); if (i >= 0) return i;
+    i = "ａｂｃｄｅ".indexOf(ch); if (i >= 0) return i;
+    i = "ＡＢＣＤＥ".indexOf(ch); if (i >= 0) return i;
+    i = "12345".indexOf(ch); if (i >= 0) return i;
+    i = "１２３４５".indexOf(ch); if (i >= 0) return i;
+    i = "①②③④⑤".indexOf(ch); if (i >= 0) return i;
+    i = "アイウエオ".indexOf(ch); if (i >= 0) return i;
+    return -1;
+  }
+
+  function parseLabels(raw) {
+    const out = [];
+    if (!raw) return out;
+    for (const ch of raw) {
+      const idx = labelToIndex(ch);
+      if (idx >= 0 && out.indexOf(idx) < 0) out.push(idx);
+    }
+    return out;
+  }
+
+  function matchChoice(line) {
+    let m = line.match(/^\s*([①-⑤])\s*(\S.*)$/);
+    if (m) return { idx: labelToIndex(m[1]), text: m[2] };
+    m = line.match(/^\s*([a-eＡ-Ｅａ-ｅA-E1-5１-５アイウエオ])\s*[\.\)．）:：、。]\s*(\S.*)$/);
+    if (m) { const idx = labelToIndex(m[1]); if (idx >= 0) return { idx: idx, text: m[2] }; }
+    m = line.match(/^\s*([a-eＡ-Ｅａ-ｅA-E1-5１-５アイウエオ])\s+(\S.*)$/);
+    if (m) { const idx = labelToIndex(m[1]); if (idx >= 0) return { idx: idx, text: m[2] }; }
+    return null;
+  }
+
+  function splitBlocks(text) {
+    const norm = text.replace(/\r\n?/g, "\n");
+    const lines = norm.split("\n");
+    const isDelim = (l) => /^\s*[-=＝ー―]{3,}\s*$/.test(l);
+    if (lines.some(isDelim)) {
+      const blocks = [];
+      let cur = [];
+      lines.forEach((l) => {
+        if (isDelim(l)) { blocks.push(cur.join("\n")); cur = []; }
+        else cur.push(l);
+      });
+      blocks.push(cur.join("\n"));
+      return blocks.map((b) => b.trim()).filter(Boolean);
+    }
+    return norm.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+  }
+
+  function parseBlock(block, defaultSubject) {
+    const lines = block.split("\n");
+    let subject = defaultSubject || "";
+    let topic = "", source = "", explanation = "", answerRaw = "", forbiddenRaw = "";
+    let importance = 2;
+    const choiceMap = {};
+    const stemLines = [];
+    const metaRe = /^\s*(科目|subject|テーマ|topic|重要度|importance|出典|source|解説|explanation|禁忌|forbidden|正答|正解|答え|解答|答|answer|ans)\s*[:：]\s*(.*)$/i;
+
+    lines.forEach((line) => {
+      const m = line.match(metaRe);
+      if (m) {
+        const key = m[1].toLowerCase();
+        const val = m[2].trim();
+        if (key === "科目" || key === "subject") subject = val;
+        else if (key === "テーマ" || key === "topic") topic = val;
+        else if (key === "出典" || key === "source") source = val;
+        else if (key === "解説" || key === "explanation") explanation = val;
+        else if (key === "禁忌" || key === "forbidden") forbiddenRaw = val;
+        else if (key === "重要度" || key === "importance") {
+          const n = parseInt(val, 10);
+          if (n === 1 || n === 2 || n === 3) importance = n;
+        } else {
+          answerRaw = val; // 正答/正解/答え/解答/答/answer/ans
+        }
+        return;
+      }
+      const cm = matchChoice(line);
+      if (cm && cm.idx >= 0) { choiceMap[cm.idx] = cm.text.trim(); return; }
+      if (line.trim()) stemLines.push(line.trim());
+    });
+
+    const idxs = Object.keys(choiceMap).map(Number);
+    if (idxs.length < 2) return { error: "選択肢が2つ以上見つかりません" };
+    const maxIdx = Math.max.apply(null, idxs);
+    const answerSet = parseLabels(answerRaw);
+    const forbSet = parseLabels(forbiddenRaw);
+    let choices = [];
+    for (let i = 0; i <= maxIdx; i++) {
+      choices.push({
+        text: (choiceMap[i] || "").trim(),
+        correct: answerSet.indexOf(i) >= 0,
+        forbidden: forbSet.indexOf(i) >= 0,
+        note: ""
+      });
+    }
+    choices = choices.filter((c) => c.text);
+    const stem = stemLines.join("\n").trim();
+    if (!stem) return { error: "問題文が見つかりません" };
+    if (choices.length < 2) return { error: "選択肢が2つ以上必要です" };
+    const correctCount = choices.filter((c) => c.correct).length;
+    if (correctCount === 0) return { error: "正答（正答: の行）が指定されていません" };
+
+    const q = {
+      subject: subject.trim() || "その他",
+      topic: topic.trim() || stem.slice(0, 24),
+      importance: importance,
+      type: correctCount >= 2 ? "multiple" : "single",
+      stem: stem,
+      choices: choices,
+      explanation: explanation.trim(),
+      pearl: "",
+      source: source.trim()
+    };
+    if (q.type === "multiple") q.pick = correctCount;
+    return { q: q };
+  }
+
+  function parseBulkText(text, defaultSubject) {
+    const blocks = splitBlocks(text);
+    const questions = [];
+    const warnings = [];
+    blocks.forEach((block, i) => {
+      const r = parseBlock(block, defaultSubject);
+      if (r.error) warnings.push("ブロック " + (i + 1) + "：" + r.error + "（スキップ）");
+      else questions.push(r.q);
+    });
+    return { questions: questions, warnings: warnings };
+  }
+
+  function renderBulkPreview() {
+    const list = $("#bulk-list");
+    list.innerHTML = "";
+    bulkParsed.forEach((q, i) => {
+      const forbid = q.choices.filter((c) => c.forbidden).length;
+      const correct = q.choices.filter((c) => c.correct).length;
+      const item = el("li", "custom-item");
+      item.innerHTML =
+        '<div class="ci-body">' +
+          '<div class="ci-title">' + (i + 1) + ". " + escapeHtml(q.topic || "(無題)") + "</div>" +
+          '<div class="ci-sub">' + escapeHtml(q.subject) + " ・ " + "★".repeat(q.importance) +
+            " ・ 選択肢" + q.choices.length + " ・ 正答" + correct +
+            (forbid ? ' ・ <span class="ci-forbid">禁忌肢' + forbid + "</span>" : "") +
+            (q.source ? " ・ 出典あり" : "") +
+          "</div>" +
+        "</div>";
+      list.appendChild(item);
+    });
+    $("#bulk-count").textContent = bulkParsed.length;
+    $("#bulk-preview").classList.toggle("hidden", bulkParsed.length === 0);
+  }
+
+  function initBulkImport() {
+    $("#bulk-parse-btn").addEventListener("click", () => {
+      const text = $("#bulk-text").value;
+      const err = $("#bulk-error");
+      if (!text.trim()) { err.textContent = "取り込むテキストを貼り付けてください。"; err.className = "form-error"; return; }
+      const res = parseBulkText(text, $("#bulk-subject").value.trim());
+      bulkParsed = res.questions;
+      if (res.warnings.length) {
+        err.innerHTML = res.warnings.map(escapeHtml).join("<br>");
+        err.className = "bulk-warn";
+      } else {
+        err.className = "form-error hidden";
+      }
+      if (bulkParsed.length === 0) {
+        $("#bulk-preview").classList.add("hidden");
+        if (!res.warnings.length) { err.textContent = "問題を認識できませんでした。書式の説明をご確認ください。"; err.className = "form-error"; }
+        return;
+      }
+      renderBulkPreview();
+    });
+
+    $("#bulk-add-btn").addEventListener("click", () => {
+      if (bulkParsed.length === 0) return;
+      const base = Date.now().toString(36);
+      bulkParsed.forEach((q, i) => {
+        q.id = "usr-" + base + "-" + i.toString(36) + Math.random().toString(36).slice(2, 5);
+        q.custom = true;
+        customQuestions.push(q);
+      });
+      saveCustom(customQuestions);
+      const n = bulkParsed.length;
+      bulkParsed = [];
+      $("#bulk-text").value = "";
+      $("#bulk-preview").classList.add("hidden");
+      $("#bulk-error").className = "form-error hidden";
+      afterCustomChange();
+      renderCustomList();
+      alert(n + " 問を追加しました。");
+    });
+
+    $("#bulk-clear-btn").addEventListener("click", () => {
+      bulkParsed = [];
+      $("#bulk-preview").classList.add("hidden");
+      $("#bulk-error").className = "form-error hidden";
+    });
+
+    $("#bulk-sample-btn").addEventListener("click", () => {
+      $("#bulk-text").value = BULK_SAMPLE;
+      $("#bulk-subject").value = "";
+    });
+  }
+
+  const BULK_SAMPLE =
+    "科目: 循環器\n" +
+    "テーマ: 急性冠症候群の初期対応\n" +
+    "重要度: 3\n" +
+    "出典: 自作サンプル\n" +
+    "強い胸痛を訴える65歳男性。来院時、まず最初に行うべき検査はどれか。\n" +
+    "a 12誘導心電図\n" +
+    "b 頭部単純CT\n" +
+    "c 眼底検査\n" +
+    "d 便潜血検査\n" +
+    "正答: a\n" +
+    "解説: 胸痛でACSを疑えば、まず12誘導心電図でST変化を確認する。\n" +
+    "---\n" +
+    "科目: 感染症\n" +
+    "敗血症を疑う患者への初期対応として適切なものはどれか。2つ選べ。\n" +
+    "a 抗菌薬投与前に血液培養を採取する\n" +
+    "b 経過観察のみとする\n" +
+    "c 経験的抗菌薬を速やかに開始する\n" +
+    "d 培養結果が出るまで抗菌薬を待つ\n" +
+    "正答: a, c\n" +
+    "禁忌: d\n" +
+    "重要度: 2\n";
 
   function openEditor() {
     resetForm();

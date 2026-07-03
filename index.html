@@ -242,6 +242,50 @@
 
       <div class="card">
         <div class="editor-head">
+          <h2>一括貼り付け取り込み</h2>
+          <button type="button" id="bulk-sample-btn" class="btn ghost small">記入例を挿入</button>
+        </div>
+        <p class="hint">問題文・選択肢・正答をまとめて貼り付けて、複数問を一度に追加できます。問題どうしは <code>---</code>（ハイフン3つ）の行、または空行で区切ります。取り込んだ問題はこの端末のブラウザ内にのみ保存されます。</p>
+        <details class="bulk-help">
+          <summary>書式の説明を見る</summary>
+          <pre>科目: 循環器          ← 任意（無ければ下の「既定の科目」を使用）
+テーマ: 急性心筋梗塞    ← 任意
+重要度: 3             ← 任意（3=必修級 / 2=頻出 / 1=標準。無ければ2）
+出典: 第◯回 医師国試 A-◯  ← 任意（自分用の記録）
+問題文をそのまま書く（複数行OK）
+a 選択肢1
+b 選択肢2
+c 選択肢3
+d 選択肢4
+正答: a            ← 複数選択は「正答: a, c」
+禁忌: d            ← 任意（選ぶと不合格級の禁忌肢）
+解説: ここに解説    ← 任意
+---
+（次の問題…）
+
+・選択肢は a) / a. / 「a 」/ 1. / ① / ア などを認識します。
+・「正答:」「答え」「解答」いずれでもOK。番号（1〜5）でも指定できます。</pre>
+        </details>
+        <label class="block" style="font-weight:700;font-size:.9rem;color:var(--ink-soft)">既定の科目（各問に「科目:」が無いとき使用）
+          <input type="text" id="bulk-subject" placeholder="例：内科" />
+        </label>
+        <textarea id="bulk-text" rows="10" placeholder="ここに問題をまとめて貼り付け"></textarea>
+        <p id="bulk-error" class="form-error hidden"></p>
+        <div class="q-actions">
+          <button type="button" id="bulk-parse-btn" class="btn primary">解析してプレビュー</button>
+        </div>
+        <div id="bulk-preview" class="hidden">
+          <h3>プレビュー（<span id="bulk-count">0</span>問）</h3>
+          <ul id="bulk-list" class="custom-list"></ul>
+          <div class="q-actions">
+            <button type="button" id="bulk-add-btn" class="btn primary">この問題を追加</button>
+            <button type="button" id="bulk-clear-btn" class="btn ghost">クリア</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="editor-head">
           <h2>自作の問題（<span id="custom-count">0</span>）</h2>
           <div class="io-btns">
             <button id="share-btn" class="btn ghost small">iCloud/ファイルに保存</button>

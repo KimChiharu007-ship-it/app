@@ -231,6 +231,21 @@
 
     $("#q-stem").textContent = q.stem;
 
+    // 画像（任意）
+    const fig = $("#q-figure");
+    const img = $("#q-image");
+    if (q.image) {
+      img.alt = q.imageAlt || "問題の画像";
+      // 読み込み後にカード高さが変わるので描画面を再計測
+      img.onload = () => Sketch.relayout();
+      img.src = q.image;
+      fig.classList.remove("hidden");
+    } else {
+      img.onload = null;
+      img.removeAttribute("src");
+      fig.classList.add("hidden");
+    }
+
     // 選択肢
     const list = $("#q-choices");
     list.className = "choices";
@@ -565,7 +580,70 @@
     $("#export-btn").addEventListener("click", exportJSON);
     $("#import-btn").addEventListener("click", () => $("#import-file").click());
     $("#import-file").addEventListener("change", importJSON);
+
+    // 画像添付
+    $("#f-image-file").addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      clearError();
+      fileToStorableImage(file)
+        .then((dataUrl) => setFormImage(dataUrl))
+        .catch((err) => flashError(err.message || "画像を読み込めませんでした。"));
+      e.target.value = "";
+    });
+    $("#f-image-remove").addEventListener("click", () => setFormImage(null));
+
     renderCustomList();
+  }
+
+  // フォームの現在の画像（data URI）
+  let formImage = null;
+
+  function setFormImage(dataUrl) {
+    formImage = dataUrl || null;
+    const wrap = $("#f-image-preview");
+    if (formImage) {
+      $("#f-image-thumb").src = formImage;
+      wrap.classList.remove("hidden");
+    } else {
+      $("#f-image-thumb").removeAttribute("src");
+      wrap.classList.add("hidden");
+    }
+  }
+
+  // 画像ファイルを保存可能な data URI に変換。小さい画像やSVGはそのまま、
+  // 大きいラスタ画像は最大1400pxへ縮小してJPEG化し、localStorageを節約する。
+  function fileToStorableImage(file) {
+    return new Promise((resolve, reject) => {
+      if (!file.type || file.type.indexOf("image/") !== 0) {
+        reject(new Error("画像ファイルを選んでください。"));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("画像の読み込みに失敗しました。"));
+      reader.onload = () => {
+        const dataUrl = reader.result;
+        if (file.size < 500 * 1024 || file.type === "image/svg+xml") {
+          resolve(dataUrl);
+          return;
+        }
+        const image = new Image();
+        image.onload = () => {
+          const maxDim = 1400;
+          const scale = Math.min(1, maxDim / Math.max(image.width, image.height));
+          const w = Math.max(1, Math.round(image.width * scale));
+          const h = Math.max(1, Math.round(image.height * scale));
+          const cv = document.createElement("canvas");
+          cv.width = w; cv.height = h;
+          cv.getContext("2d").drawImage(image, 0, 0, w, h);
+          try { resolve(cv.toDataURL("image/jpeg", 0.85)); }
+          catch (e) { resolve(dataUrl); }
+        };
+        image.onerror = () => resolve(dataUrl);
+        image.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
   }
 
   function updateSubjectDatalist() {
@@ -632,6 +710,7 @@
       importance: Number($("#f-importance").value),
       type: $("#f-type").value,
       stem: $("#f-stem").value.trim(),
+      image: formImage || "",
       choices,
       explanation: $("#f-explanation").value.trim(),
       pearl: $("#f-pearl").value.trim()
@@ -691,6 +770,7 @@
     $("#f-stem").value = q.stem;
     $("#f-explanation").value = q.explanation || "";
     $("#f-pearl").value = q.pearl || "";
+    setFormImage(q.image || null);
     $("#choices-editor").innerHTML = "";
     q.choices.forEach((c) => addChoiceRow(c));
     $("#cancel-edit-btn").classList.remove("hidden");
@@ -711,6 +791,7 @@
     $("#q-form").reset();
     $("#f-id").value = "";
     $("#editor-title").textContent = "問題を作成";
+    setFormImage(null);
     $("#choices-editor").innerHTML = "";
     for (let i = 0; i < 4; i++) addChoiceRow();
     $("#cancel-edit-btn").classList.add("hidden");
@@ -744,6 +825,7 @@
           '<div class="ci-title">' + escapeHtml(q.topic || "(無題)") + "</div>" +
           '<div class="ci-sub">' + escapeHtml(q.subject) + " ・ " +
             "★".repeat(q.importance) +
+            (q.image ? " ・ 🖼画像" : "") +
             (forbidCount ? ' ・ <span class="ci-forbid">禁忌肢' + forbidCount + "</span>" : "") +
           "</div>" +
         "</div>" +
@@ -811,6 +893,8 @@
       importance: [1, 2, 3].includes(Number(raw.importance)) ? Number(raw.importance) : 2,
       type: raw.type === "multiple" ? "multiple" : "single",
       stem: String(raw.stem || "").trim(),
+      image: typeof raw.image === "string" ? raw.image : "",
+      imageAlt: String(raw.imageAlt || "").trim(),
       explanation: String(raw.explanation || "").trim(),
       pearl: String(raw.pearl || "").trim(),
       choices: Array.isArray(raw.choices) ? raw.choices.map((c) => ({
@@ -1089,7 +1173,13 @@
     },
 
     // 選択肢の直前にペン描画があったか（タップ選択の抑止に使用）
-    choiceJustDrew() { return choicePad ? choicePad.justDrew() : false; }
+    choiceJustDrew() { return choicePad ? choicePad.justDrew() : false; },
+
+    // 画像読み込み等でカード高さが変わったら描画面を再計測
+    relayout() {
+      if (memoPad) memoPad.resize();
+      if (choicePad) choicePad.resize();
+    }
   };
 
   /* ---------- 起動 ---------- */

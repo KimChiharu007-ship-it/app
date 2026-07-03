@@ -93,6 +93,9 @@
           <span id="q-type" class="tag ghost"></span>
         </div>
         <p id="q-stem" class="q-stem"></p>
+        <figure id="q-figure" class="q-figure hidden">
+          <img id="q-image" alt="" />
+        </figure>
 
         <div class="annotate-tools">
           <button type="button" id="annotate-toggle" class="tool" title="指・マウスでも選択肢に書き込む（タップ選択を止める）">✏️ 選択肢に書き込む</button>
@@ -195,6 +198,17 @@
             <label class="block">問題文
               <textarea id="f-stem" rows="3" placeholder="症例・設問を入力" required></textarea>
             </label>
+          </div>
+
+          <div class="field">
+            <label class="block">画像（任意）
+              <span class="hint">X線・心電図・写真・シェーマなどを添付できます（大きい画像は自動で縮小）。</span>
+            </label>
+            <input type="file" id="f-image-file" accept="image/*" />
+            <div id="f-image-preview" class="img-preview hidden">
+              <img id="f-image-thumb" alt="プレビュー" />
+              <button type="button" id="f-image-remove" class="btn ghost small">画像を削除</button>
+            </div>
           </div>
 
           <div class="field">

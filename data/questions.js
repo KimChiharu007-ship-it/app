@@ -14,6 +14,8 @@
  *   type       : "single"（1つ選べ） / "multiple"（2つ選べ 等）
  *   pick       : multiple のとき選ぶ数
  *   stem       : 問題文
+ *   image      : 画像（任意）。URL または data URI（例：X線・心電図・写真・シェーマ）
+ *   imageAlt   : 画像の代替テキスト（任意）
  *   choices    : 選択肢配列
  *       text     : 選択肢テキスト
  *       correct  : 正答なら true
@@ -319,5 +321,35 @@ window.QUESTIONS = [
     ],
     explanation: "心電図変化を伴う高K血症では、まずカルシウムで心筋を保護し、続いてGI療法・利尿・透析などでKを下げる。K含有輸液は禁忌的誤り。",
     pearl: "高K + 心電図変化 ＝ まずCaで心保護。K投与は論外。"
+  },
+  {
+    id: "cir-004",
+    subject: "循環器",
+    topic: "刺激伝導系のシェーマ",
+    importance: 1,
+    type: "single",
+    stem: "図は心臓の刺激伝導系を示す模式図である。房室結節（AV結節）を示すのはどれか。1つ選べ。",
+    // 自己完結のSVGシェーマ（外部ファイル不要）
+    image: "data:image/svg+xml;utf8," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="420" height="340" viewBox="0 0 420 340" font-family="sans-serif">' +
+      '<rect width="420" height="340" fill="#ffffff"/>' +
+      '<path d="M210 90 C 168 24, 78 44, 90 126 C 100 196, 172 252, 210 300 C 248 252, 320 196, 330 126 C 342 44, 252 24, 210 90 Z" fill="#fdecec" stroke="#dc2626" stroke-width="2"/>' +
+      '<path d="M252 104 Q 216 134 212 162 Q 208 196 204 238" fill="none" stroke="#b45309" stroke-width="3" stroke-dasharray="2 5"/>' +
+      '<path d="M204 238 L 176 280 M204 238 L 236 280" fill="none" stroke="#b45309" stroke-width="3" stroke-dasharray="2 5"/>' +
+      '<circle cx="252" cy="104" r="11" fill="#2563eb"/><text x="252" y="109" font-size="14" fill="#fff" text-anchor="middle" font-weight="bold">A</text>' +
+      '<circle cx="212" cy="162" r="11" fill="#2563eb"/><text x="212" y="167" font-size="14" fill="#fff" text-anchor="middle" font-weight="bold">B</text>' +
+      '<circle cx="206" cy="206" r="11" fill="#2563eb"/><text x="206" y="211" font-size="14" fill="#fff" text-anchor="middle" font-weight="bold">C</text>' +
+      '<circle cx="204" cy="252" r="11" fill="#2563eb"/><text x="204" y="257" font-size="14" fill="#fff" text-anchor="middle" font-weight="bold">D</text>' +
+      '</svg>'
+    ),
+    imageAlt: "心臓の刺激伝導系の模式図。A〜Dの4点が示されている。",
+    choices: [
+      { text: "A", correct: false, forbidden: false, note: "上方（心房上部）にあり洞結節（SA結節）に相当する。" },
+      { text: "B", correct: true, forbidden: false, note: "心房と心室の境界部にあり房室結節（AV結節）に相当する。" },
+      { text: "C", correct: false, forbidden: false, note: "房室結節の下方に続くヒス束に相当する。" },
+      { text: "D", correct: false, forbidden: false, note: "さらに末梢の脚〜プルキンエ線維に相当する。" }
+    ],
+    explanation: "刺激は洞結節(A)→房室結節(B)→ヒス束(C)→脚・プルキンエ線維(D)の順に伝わる。房室結節は心房と心室の境界部に位置する。",
+    pearl: "画像問題の練習用デモ。伝導系の順序：洞結節→房室結節→ヒス束→プルキンエ。"
   }
 ];

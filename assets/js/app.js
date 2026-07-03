@@ -544,6 +544,9 @@
     });
     $("#review-wrong-btn").addEventListener("click", reviewWrongOnly);
     $("#open-editor-btn").addEventListener("click", openEditor);
+    // 画像の拡大表示
+    $("#q-image-zoom").addEventListener("click", () => Lightbox.open($("#q-image").src, $("#q-image").alt));
+    $("#q-image").addEventListener("click", () => Lightbox.open($("#q-image").src, $("#q-image").alt));
     $("#editor-home-btn").addEventListener("click", () => {
       renderLifetimeStats();
       updatePoolInfo();
@@ -578,6 +581,7 @@
     $("#q-form").addEventListener("submit", (e) => { e.preventDefault(); saveQuestion(); });
     $("#cancel-edit-btn").addEventListener("click", resetForm);
     $("#export-btn").addEventListener("click", exportJSON);
+    $("#share-btn").addEventListener("click", shareJSON);
     $("#import-btn").addEventListener("click", () => $("#import-file").click());
     $("#import-file").addEventListener("change", importJSON);
 
@@ -813,10 +817,12 @@
     if (customQuestions.length === 0) {
       empty.classList.remove("hidden");
       $("#export-btn").disabled = true;
+      $("#share-btn").disabled = true;
       return;
     }
     empty.classList.add("hidden");
     $("#export-btn").disabled = false;
+    $("#share-btn").disabled = false;
     customQuestions.forEach((q) => {
       const forbidCount = q.choices.filter((c) => c.forbidden).length;
       const item = el("li", "custom-item");
@@ -850,6 +856,25 @@
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  }
+
+  function jsonFilename() {
+    return "kokushi-questions-" + new Date().toISOString().slice(0, 10) + ".json";
+  }
+
+  // iOSの共有シート経由で「"ファイル"に保存」→ iCloud Drive を選べる。
+  // 対応していない環境（多くのPCブラウザ）では通常のダウンロードにフォールバック。
+  function shareJSON() {
+    if (customQuestions.length === 0) return;
+    const json = JSON.stringify(customQuestions, null, 2);
+    try {
+      const file = new File([json], jsonFilename(), { type: "application/json" });
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+        navigator.share({ files: [file], title: "国試ドリル 問題データ" }).catch(() => {});
+        return;
+      }
+    } catch (e) { /* フォールバックへ */ }
+    exportJSON();
   }
 
   function importJSON(e) {
@@ -1182,6 +1207,106 @@
     }
   };
 
+  /* =====================================================================
+   * 画像の拡大表示（ライトボックス）
+   * ・ピンチ／＋−ボタン／ホイールで拡大縮小
+   * ・ドラッグで移動、ダブルタップで等倍⇔拡大、背景タップ/Escで閉じる
+   * ===================================================================*/
+  const Lightbox = (function () {
+    let box, stage, img;
+    let scale = 1, tx = 0, ty = 0;
+    const pointers = new Map();
+    let startDist = 0, startScale = 1, panStart = null, lastTap = 0;
+
+    function apply() { img.style.transform = "translate(" + tx + "px," + ty + "px) scale(" + scale + ")"; }
+    function reset() { scale = 1; tx = 0; ty = 0; apply(); }
+    function setScale(s) {
+      scale = Math.max(1, Math.min(6, s));
+      if (scale === 1) { tx = 0; ty = 0; }
+      apply();
+    }
+    function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+    function open(src, alt) {
+      if (!src) return;
+      img.src = src;
+      img.alt = alt || "";
+      reset();
+      box.classList.remove("hidden");
+      document.body.style.overflow = "hidden";
+    }
+    function close() {
+      box.classList.add("hidden");
+      img.removeAttribute("src");
+      document.body.style.overflow = "";
+      pointers.clear();
+      panStart = null;
+    }
+
+    function onDown(e) {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+      if (pointers.size === 2) {
+        const pv = [...pointers.values()];
+        startDist = dist(pv[0], pv[1]);
+        startScale = scale;
+      } else if (pointers.size === 1) {
+        const now = Date.now();
+        if (now - lastTap < 300) setScale(scale > 1 ? 1 : 2.5); // ダブルタップ
+        lastTap = now;
+        panStart = { x: e.clientX - tx, y: e.clientY - ty };
+      }
+    }
+    function onMove(e) {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) {
+        const pv = [...pointers.values()];
+        const d = dist(pv[0], pv[1]);
+        if (startDist > 0) setScale(startScale * (d / startDist));
+        e.preventDefault();
+      } else if (pointers.size === 1 && scale > 1 && panStart) {
+        tx = e.clientX - panStart.x;
+        ty = e.clientY - panStart.y;
+        apply();
+        e.preventDefault();
+      }
+    }
+    function onUp(e) {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) startDist = 0;
+      if (pointers.size === 1) {
+        const p = [...pointers.values()][0];
+        panStart = { x: p.x - tx, y: p.y - ty };
+      } else if (pointers.size === 0) {
+        panStart = null;
+      }
+    }
+
+    function init() {
+      box = $("#lightbox"); stage = $("#lb-stage"); img = $("#lb-image");
+      $("#lb-close").addEventListener("click", close);
+      $("#lb-zoom-in").addEventListener("click", () => setScale(scale * 1.4));
+      $("#lb-zoom-out").addEventListener("click", () => setScale(scale / 1.4));
+      $("#lb-zoom-reset").addEventListener("click", reset);
+      box.addEventListener("click", (e) => { if (e.target === box) close(); });
+      stage.addEventListener("click", (e) => { if (e.target === stage) close(); });
+      stage.addEventListener("pointerdown", onDown);
+      stage.addEventListener("pointermove", onMove);
+      stage.addEventListener("pointerup", onUp);
+      stage.addEventListener("pointercancel", onUp);
+      stage.addEventListener("pointerleave", onUp);
+      stage.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        setScale(scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
+      }, { passive: false });
+      document.addEventListener("keydown", (e) => {
+        if (!box.classList.contains("hidden") && e.key === "Escape") close();
+      });
+    }
+    return { init, open };
+  })();
+
   /* ---------- 起動 ---------- */
   if (getAllQuestions().length === 0) {
     document.body.innerHTML =
@@ -1191,5 +1316,6 @@
   initStartScreen();
   initEditor();
   Sketch.init();
+  Lightbox.init();
   bindGlobal();
 })();

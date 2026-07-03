@@ -95,6 +95,7 @@
         <p id="q-stem" class="q-stem"></p>
         <figure id="q-figure" class="q-figure hidden">
           <img id="q-image" alt="" />
+          <button type="button" id="q-image-zoom" class="zoom-btn" title="画像を拡大">⤢ 拡大</button>
         </figure>
 
         <div class="annotate-tools">
@@ -243,6 +244,7 @@
         <div class="editor-head">
           <h2>自作の問題（<span id="custom-count">0</span>）</h2>
           <div class="io-btns">
+            <button id="share-btn" class="btn ghost small">iCloud/ファイルに保存</button>
             <button id="export-btn" class="btn ghost small">JSONで書き出し</button>
             <button id="import-btn" class="btn ghost small">読み込み</button>
             <input type="file" id="import-file" accept="application/json,.json" hidden />
@@ -250,10 +252,25 @@
         </div>
         <ul id="custom-list" class="custom-list"></ul>
         <p id="custom-empty" class="pool-info">まだ自作の問題はありません。上のフォームから追加できます。</p>
+        <p class="pool-info io-hint">iPhone/iPadでは「iCloud/ファイルに保存」→「"ファイル"に保存」→ iCloud Drive を選ぶと、問題（画像を含む）をiCloudに保存・他端末と共有できます。取り込みは「読み込み」から。</p>
       </div>
     </section>
 
   </main>
+
+  <!-- 画像の拡大表示（ライトボックス） -->
+  <div id="lightbox" class="lightbox hidden" role="dialog" aria-modal="true" aria-label="画像の拡大表示">
+    <div class="lightbox-bar">
+      <button type="button" id="lb-zoom-out" class="lb-btn" title="縮小">−</button>
+      <button type="button" id="lb-zoom-reset" class="lb-btn" title="等倍に戻す">等倍</button>
+      <button type="button" id="lb-zoom-in" class="lb-btn" title="拡大">＋</button>
+      <button type="button" id="lb-close" class="lb-btn lb-close" title="閉じる">✕ 閉じる</button>
+    </div>
+    <div id="lb-stage" class="lightbox-stage">
+      <img id="lb-image" alt="" draggable="false" />
+    </div>
+    <p class="lightbox-hint">ピンチ／＋−で拡大・ドラッグで移動・ダブルタップで切替・背景タップで閉じる</p>
+  </div>
 
   <footer class="app-footer wrap">
     <p>※ 本アプリの問題は学習用に作成したオリジナル練習問題です。診療・受験対策は必ず最新の成書・ガイドラインで確認してください。</p>

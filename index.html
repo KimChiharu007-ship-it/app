@@ -85,13 +85,23 @@
         </div>
       </div>
 
-      <article class="card question-card">
+      <article id="question-card" class="card question-card">
+        <canvas id="choice-canvas" class="choice-overlay"></canvas>
         <div class="q-meta">
           <span id="q-subject" class="tag"></span>
           <span id="q-importance" class="tag imp"></span>
           <span id="q-type" class="tag ghost"></span>
         </div>
         <p id="q-stem" class="q-stem"></p>
+
+        <div class="annotate-tools">
+          <button type="button" id="annotate-toggle" class="tool" title="指・マウスでも選択肢に書き込む（タップ選択を止める）">✏️ 選択肢に書き込む</button>
+          <span class="annotate-hint">Apple Pencilはいつでも書けます</span>
+          <span class="spacer"></span>
+          <button type="button" id="choice-undo" class="btn ghost small" title="選択肢の書き込みを戻す">↶ 戻す</button>
+          <button type="button" id="choice-clear" class="btn ghost small" title="選択肢の書き込みを全消し">全消し</button>
+        </div>
+
         <ul id="q-choices" class="choices"></ul>
 
         <div id="feedback" class="feedback hidden"></div>

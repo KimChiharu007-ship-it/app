@@ -244,6 +244,26 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; fo
 .result-item .ri-title { font-weight: 600; font-size: .95rem; }
 .result-item .ri-sub { font-size: .8rem; color: var(--ink-soft); }
 
+/* ---------- 選択肢オーバーレイ（選択肢への書き込み） ---------- */
+.question-card { position: relative; }
+.choice-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  pointer-events: none; /* インクは常に表示・ポインタは下の選択肢へ通す */
+}
+.question-card.annotating { cursor: crosshair; }
+.question-card.annotating .choices .choice { cursor: crosshair; }
+
+.annotate-tools {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 14px; position: relative; z-index: 6;
+}
+.annotate-tools .spacer { flex: 1; }
+.annotate-hint { font-size: .74rem; color: var(--ink-soft); }
+#annotate-toggle.active { background: var(--ink); color: #fff; border-color: var(--ink); font-weight: 600; }
+
 /* ---------- Sketch pad (手書きメモ) ---------- */
 .sketch-card { margin-top: -6px; }
 .sketch-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }

@@ -264,6 +264,8 @@
   function toggleChoice(li, shape) {
     const list = $("#q-choices");
     if (list.classList.contains("answered")) return;
+    // 直前に選択肢へ手書きした場合は、そのタップで解答を選ばない
+    if (Sketch.choiceJustDrew()) return;
     if (shape === "radio") {
       $$(".choice", list).forEach((c) => c.classList.remove("selected"));
       li.classList.add("selected");
@@ -833,38 +835,49 @@
   }
 
   /* =====================================================================
-   * 手書きメモ（Apple Pencil / タッチ / マウス）
+   * 手書き描画（Apple Pencil / タッチ / マウス）
    * ---------------------------------------------------------------------
    * ・Pointer Events を使用し、ペンの筆圧で線の太さを変える
    * ・ペン使用を検知したらタッチ入力は無視（パームリジェクション）
    * ・描画は問題IDごとに localStorage へベクター（点列）で保存
+   * ・2つの描画面を持つ：
+   *     memoPad   … 問題の下の手書きメモ欄
+   *     choicePad … 問題カード上のオーバーレイ（選択肢への書き込み）
+   *   ペン・色・太さの設定は共有し、下部のツールバーで操作する。
    * ===================================================================*/
-  const SKETCH_KEY = "kokushi-drill-sketch-v1";
-  const Sketch = (function () {
-    let canvas, ctx, wrap;
+  const MEMO_KEY = "kokushi-drill-sketch-v1";
+  const CHOICE_KEY = "kokushi-drill-choice-v1";
+  const COLORS = ["#1b2333", "#2563eb", "#dc2626", "#16a34a", "#d97706"];
+
+  // ペン・色・太さは両描画面で共有
+  const penSettings = { tool: "pen", color: "#1b2333", size: 3 };
+
+  // 選択肢オーバーレイ：指・マウスでも書き込むモード
+  let annotateChoices = false;
+
+  function makeSketch(opts) {
+    // opts: { canvas, target, storeKey, shouldDraw, noDrawSelector }
+    const canvas = opts.canvas;
+    const target = opts.target || canvas;
+    const ctx = canvas.getContext("2d");
     let dpr = 1;
-    let strokes = [];      // 現在の問題のストローク
-    let current = null;    // 描画中のストローク
+    let strokes = [];
+    let current = null;
     let qid = null;
-    let store = {};        // qid -> strokes
-    let tool = "pen";
-    let color = "#1b2333";
-    let size = 3;
-    let penSeen = false;   // パームリジェクション用
+    let store = {};
+    let penSeen = false;
     let drawing = false;
     let activeId = null;
+    let lastEnd = 0;
 
-    const COLORS = ["#1b2333", "#2563eb", "#dc2626", "#16a34a", "#d97706"];
+    try { store = JSON.parse(localStorage.getItem(opts.storeKey) || "{}") || {}; }
+    catch (e) { store = {}; }
 
-    function loadStore() {
-      try { store = JSON.parse(localStorage.getItem(SKETCH_KEY) || "{}") || {}; }
-      catch (e) { store = {}; }
-    }
     function persist() {
       try {
         if (qid == null) return;
         if (strokes.length) store[qid] = strokes; else delete store[qid];
-        localStorage.setItem(SKETCH_KEY, JSON.stringify(store));
+        localStorage.setItem(opts.storeKey, JSON.stringify(store));
       } catch (e) {}
     }
 
@@ -873,12 +886,10 @@
       const p = e.pointerType === "pen" ? (e.pressure > 0 ? e.pressure : 0.4) : 0.6;
       return { x: e.clientX - r.left, y: e.clientY - r.top, p };
     }
-
     function lineWidthFor(s, p) {
       const mult = s.tool === "eraser" ? 3.2 : (0.4 + 1.3 * (p != null ? p : 0.5));
       return Math.max(0.6, s.size * mult);
     }
-
     function drawStroke(s) {
       const pts = s.points;
       if (!pts || pts.length === 0) return;
@@ -909,7 +920,6 @@
       }
       ctx.restore();
     }
-
     function redraw() {
       if (!ctx) return;
       ctx.save();
@@ -919,11 +929,15 @@
       strokes.forEach(drawStroke);
       if (current) drawStroke(current);
     }
-
     function resize() {
-      if (!canvas || !wrap) return;
-      const r = wrap.getBoundingClientRect();
+      // canvas は置換要素で inset:0 では伸びないため、計測用要素からCSSサイズを明示指定する
+      const measureEl = opts.sizeEl || canvas;
+      const r = measureEl.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return; // 非表示時はスキップ
+      if (opts.sizeEl) {
+        canvas.style.width = r.width + "px";
+        canvas.style.height = r.height + "px";
+      }
       dpr = window.devicePixelRatio || 1;
       canvas.width = Math.round(r.width * dpr);
       canvas.height = Math.round(r.height * dpr);
@@ -931,14 +945,22 @@
       redraw();
     }
 
+    function allowed(e) {
+      // ボタン等の操作要素の上では描かない（タップを通す）
+      if (opts.noDrawSelector && e.target && e.target.closest &&
+          e.target.closest(opts.noDrawSelector)) return false;
+      return opts.shouldDraw ? opts.shouldDraw(e) : true;
+    }
+
     function onDown(e) {
       if (e.pointerType === "pen") penSeen = true;
       if (e.pointerType === "touch" && penSeen) return; // パームリジェクション
+      if (!allowed(e)) return;                          // 選択モードでの指/マウス等は通す
       if (drawing) return;
       drawing = true;
       activeId = e.pointerId;
-      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
-      current = { tool, color, size, points: [ptFromEvent(e)] };
+      try { target.setPointerCapture(e.pointerId); } catch (_) {}
+      current = { tool: penSettings.tool, color: penSettings.color, size: penSettings.size, points: [ptFromEvent(e)] };
       redraw();
       e.preventDefault();
     }
@@ -954,31 +976,44 @@
       if (!drawing || e.pointerId !== activeId) return;
       drawing = false;
       activeId = null;
-      try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      lastEnd = Date.now();
+      try { target.releasePointerCapture(e.pointerId); } catch (_) {}
       if (current && current.points.length) strokes.push(current);
       current = null;
       redraw();
       persist();
     }
 
-    function setTool(t) {
-      tool = t;
-      $$("#sketch-card .tool").forEach((b) => b.classList.toggle("active", b.dataset.tool === t));
-    }
-    function setColor(c) {
-      color = c;
-      if (tool === "eraser") setTool("pen");
-      $$("#pen-colors .swatch").forEach((s) => s.classList.toggle("active", s.dataset.color === c));
-    }
+    target.addEventListener("pointerdown", onDown);
+    target.addEventListener("pointermove", onMove);
+    target.addEventListener("pointerup", onUp);
+    target.addEventListener("pointercancel", onUp);
+    target.addEventListener("pointerleave", onUp);
 
-    function init() {
-      canvas = $("#sketch-canvas");
-      wrap = $("#canvas-wrap");
-      if (!canvas) return;
-      ctx = canvas.getContext("2d");
-      loadStore();
+    return {
+      resize,
+      setQuestion(id) {
+        qid = id;
+        strokes = store[id] ? JSON.parse(JSON.stringify(store[id])) : [];
+        current = null;
+        resize();
+      },
+      undo() { strokes.pop(); redraw(); persist(); },
+      clear(ask) {
+        if (ask && strokes.length && !confirm("この書き込みを全て消去しますか？")) return;
+        strokes = []; redraw(); persist();
+      },
+      hasInk() { return strokes.length > 0; },
+      justDrew() { return Date.now() - lastEnd < 250; }
+    };
+  }
 
-      // カラースウォッチ生成
+  let memoPad = null;
+  let choicePad = null;
+
+  const Sketch = {
+    init() {
+      // 共有ツールバー（メモ欄の下）
       const cbox = $("#pen-colors");
       COLORS.forEach((c, i) => {
         const b = el("button", "swatch" + (i === 0 ? " active" : ""));
@@ -989,39 +1024,73 @@
         b.addEventListener("click", () => setColor(c));
         cbox.appendChild(b);
       });
-
       $$("#sketch-card .tool").forEach((b) =>
         b.addEventListener("click", () => setTool(b.dataset.tool)));
-      $("#pen-size").addEventListener("input", (e) => { size = Number(e.target.value); });
-      $("#undo-btn").addEventListener("click", () => { strokes.pop(); redraw(); persist(); });
-      $("#clear-btn").addEventListener("click", () => {
-        if (strokes.length && !confirm("このメモを全て消去しますか？")) return;
-        strokes = []; redraw(); persist();
-      });
+      $("#pen-size").addEventListener("input", (e) => { penSettings.size = Number(e.target.value); });
+      $("#undo-btn").addEventListener("click", () => memoPad && memoPad.undo());
+      $("#clear-btn").addEventListener("click", () => memoPad && memoPad.clear(true));
       $("#sketch-toggle").addEventListener("click", () => {
         const body = $("#sketch-body");
         const hidden = body.classList.toggle("collapsed");
         $("#sketch-toggle").textContent = hidden ? "メモを表示" : "メモを隠す";
-        if (!hidden) resize();
+        if (!hidden && memoPad) memoPad.resize();
       });
 
-      canvas.addEventListener("pointerdown", onDown);
-      canvas.addEventListener("pointermove", onMove);
-      canvas.addEventListener("pointerup", onUp);
-      canvas.addEventListener("pointercancel", onUp);
-      canvas.addEventListener("pointerleave", onUp);
-      window.addEventListener("resize", resize);
-    }
+      // メモ欄：全入力で描画
+      memoPad = makeSketch({
+        canvas: $("#sketch-canvas"),
+        storeKey: MEMO_KEY
+      });
 
-    function setQuestion(id) {
-      qid = id;
-      strokes = store[id] ? JSON.parse(JSON.stringify(store[id])) : [];
-      current = null;
-      resize(); // サイズ確定＋再描画
-    }
+      // 選択肢オーバーレイ：ペンは常に描画、指/マウスは「書き込みモード」時のみ。
+      // ボタン等の上では描かず、タップを通す。
+      choicePad = makeSketch({
+        canvas: $("#choice-canvas"),
+        target: $("#question-card"),
+        sizeEl: $("#question-card"),
+        storeKey: CHOICE_KEY,
+        noDrawSelector: ".q-actions, .annotate-tools, button, a, input, select, textarea",
+        shouldDraw: (e) => annotateChoices || e.pointerType === "pen"
+      });
 
-    return { init, setQuestion, resize };
-  })();
+      // 選択肢書き込みのコントロール
+      $("#annotate-toggle").addEventListener("click", () => {
+        annotateChoices = !annotateChoices;
+        $("#annotate-toggle").classList.toggle("active", annotateChoices);
+        $("#question-card").classList.toggle("annotating", annotateChoices);
+      });
+      $("#choice-undo").addEventListener("click", () => choicePad && choicePad.undo());
+      $("#choice-clear").addEventListener("click", () => choicePad && choicePad.clear(true));
+
+      window.addEventListener("resize", () => {
+        if (memoPad) memoPad.resize();
+        if (choicePad) choicePad.resize();
+      });
+
+      function setTool(t) {
+        penSettings.tool = t;
+        $$("#sketch-card .tool").forEach((b) => b.classList.toggle("active", b.dataset.tool === t));
+      }
+      function setColor(c) {
+        penSettings.color = c;
+        if (penSettings.tool === "eraser") setTool("pen");
+        $$("#pen-colors .swatch").forEach((s) => s.classList.toggle("active", s.dataset.color === c));
+      }
+    },
+
+    // 問題の切り替え時に両描画面を対象問題へ
+    setQuestion(id) {
+      // 新しい問題では選択モードに戻す（誤操作防止。ペンは常に書ける）
+      annotateChoices = false;
+      $("#annotate-toggle").classList.remove("active");
+      $("#question-card").classList.remove("annotating");
+      if (memoPad) memoPad.setQuestion(id);
+      if (choicePad) choicePad.setQuestion(id);
+    },
+
+    // 選択肢の直前にペン描画があったか（タップ選択の抑止に使用）
+    choiceJustDrew() { return choicePad ? choicePad.justDrew() : false; }
+  };
 
   /* ---------- 起動 ---------- */
   if (getAllQuestions().length === 0) {

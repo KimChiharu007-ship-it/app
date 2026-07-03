@@ -147,6 +147,8 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; fo
 .counter.ok { color: var(--ok); }
 .counter.ng { color: var(--ng); }
 .counter.forbid { color: var(--forbid-line); }
+.counter.timer { color: var(--primary-dark); }
+.counter.timer b { font-variant-numeric: tabular-nums; }
 
 .q-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .tag { font-size: .74rem; padding: 3px 10px; border-radius: 999px; background: #eef2fb; color: var(--primary-dark); font-weight: 600; }

@@ -71,6 +71,30 @@
   /* ---------- セッション状態 ---------- */
   let session = null;
 
+  /* ---------- 解答タイマー ---------- */
+  let timerInterval = null;
+  let questionStart = 0;
+
+  function formatTime(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    const m = Math.floor(s / 60);
+    return m + ":" + String(s % 60).padStart(2, "0");
+  }
+  function renderTimer() {
+    $("#q-timer").textContent = formatTime(Date.now() - questionStart);
+  }
+  function startQuestionTimer() {
+    stopQuestionTimer();
+    questionStart = Date.now();
+    $("#q-timer").textContent = "0:00";
+    timerInterval = setInterval(renderTimer, 1000);
+  }
+  // タイマーを止めて経過ms（この問題を開いていた時間）を返す
+  function stopQuestionTimer() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    return questionStart ? Date.now() - questionStart : 0;
+  }
+
   /* =====================================================================
    * スタート画面のセットアップ
    * ===================================================================*/
@@ -274,6 +298,9 @@
 
     // 手書きメモをこの問題用に切り替え
     Sketch.setQuestion(q.id);
+
+    // この問題のタイマー開始
+    startQuestionTimer();
   }
 
   function toggleChoice(li, shape) {
@@ -329,10 +356,13 @@
       }
     });
 
+    // 解答タイマーを止めて経過時間を記録
+    const elapsedMs = stopQuestionTimer();
+
     // セッション集計
     if (isCorrect) session.correct++; else session.wrong++;
     if (pickedForbidden) session.forbidden++;
-    session.results.push({ id: q.id, correct: isCorrect, forbidden: pickedForbidden, question: q });
+    session.results.push({ id: q.id, correct: isCorrect, forbidden: pickedForbidden, question: q, elapsedMs: elapsedMs });
 
     // 要復習リスト更新（不正解 or 禁忌ヒットで登録、正解なら外す）
     if (!isCorrect || pickedForbidden) addReview(q.id);
@@ -346,21 +376,24 @@
 
     updateLiveCounters();
 
+    // タイマー表示を確定値に更新
+    $("#q-timer").textContent = formatTime(elapsedMs);
+
     // 練習モードは即時フィードバック、模試モードは静かに次へ
     if (session.mode === "exam") {
       // 模試: 色付けも最小限（正誤は伏せる）。ここでは選択のみ確定して次へ。
-      resetExamStyling(list, selectedIdx, q);
+      resetExamStyling(list, selectedIdx, q, elapsedMs);
       $("#submit-btn").classList.add("hidden");
       $("#next-btn").classList.remove("hidden");
     } else {
-      showFeedback(q, isCorrect, pickedForbidden);
+      showFeedback(q, isCorrect, pickedForbidden, elapsedMs);
       $("#submit-btn").classList.add("hidden");
       $("#next-btn").classList.remove("hidden");
     }
   }
 
   // 模試モードでは正誤を隠し、選択のみ示す
-  function resetExamStyling(list, selectedIdx, q) {
+  function resetExamStyling(list, selectedIdx, q, elapsedMs) {
     $$(".choice", list).forEach((li) => {
       li.classList.remove("is-correct", "is-wrong", "is-forbidden");
       li.querySelectorAll(".flag").forEach((f) => f.remove());
@@ -370,11 +403,12 @@
     list.classList.remove("answered"); // 解説noteを隠す
     const fb = $("#feedback");
     fb.className = "feedback";
-    fb.innerHTML = '<span class="verdict">解答を記録しました（採点は最後に表示）</span>';
+    fb.innerHTML = '<span class="verdict">解答を記録しました（採点は最後に表示）</span>' +
+      '<div class="src">解答時間：' + formatTime(elapsedMs) + '</div>';
     fb.classList.remove("hidden");
   }
 
-  function showFeedback(q, isCorrect, pickedForbidden) {
+  function showFeedback(q, isCorrect, pickedForbidden, elapsedMs) {
     const fb = $("#feedback");
     let cls = isCorrect ? "correct" : "wrong";
     if (pickedForbidden) cls = "forbidden";
@@ -389,6 +423,7 @@
     if (q.explanation) html += `<div class="exp">${escapeHtml(q.explanation)}</div>`;
     if (q.pearl) html += `<div class="pearl">💡 ${escapeHtml(q.pearl)}</div>`;
     if (q.source) html += `<div class="src">出典：${escapeHtml(q.source)}</div>`;
+    if (elapsedMs != null) html += `<div class="src">解答時間：${formatTime(elapsedMs)}</div>`;
     fb.innerHTML = html;
     fb.classList.remove("hidden");
   }
@@ -415,11 +450,16 @@
     $("#progress-bar").firstElementChild.style.width = "100%";
     const total = session.questions.length;
     const rate = total ? Math.round((session.correct / total) * 100) : 0;
+    const answered = session.results.length;
+    const totalMs = session.results.reduce((sum, r) => sum + (r.elapsedMs || 0), 0);
+    const avgMs = answered ? totalMs / answered : 0;
 
     $("#result-summary").innerHTML = `
       <div class="stat"><span class="num">${session.correct}/${total}</span><span class="lbl">正答</span></div>
       <div class="stat ok"><span class="num">${rate}%</span><span class="lbl">正答率</span></div>
       <div class="stat forbid"><span class="num">${session.forbidden}</span><span class="lbl">禁忌ヒット</span></div>
+      <div class="stat"><span class="num">${formatTime(totalMs)}</span><span class="lbl">合計時間</span></div>
+      <div class="stat"><span class="num">${formatTime(avgMs)}</span><span class="lbl">1問平均</span></div>
     `;
 
     const banner = $("#forbidden-warning");
@@ -447,7 +487,7 @@
         <span class="badge">${badge}</span>
         <div class="ri-body">
           <div class="ri-title">${i + 1}. ${escapeHtml(r.question.topic)}</div>
-          <div class="ri-sub">${escapeHtml(r.question.subject)}${r.forbidden ? " ・禁忌肢を選択" : (r.correct ? " ・正解" : " ・不正解")}</div>
+          <div class="ri-sub">${escapeHtml(r.question.subject)}${r.forbidden ? " ・禁忌肢を選択" : (r.correct ? " ・正解" : " ・不正解")} ・ ⏱${formatTime(r.elapsedMs || 0)}</div>
         </div>`;
       list.appendChild(item);
     });
@@ -536,6 +576,7 @@
     $("#next-btn").addEventListener("click", nextQuestion);
     $("#quit-btn").addEventListener("click", () => {
       if (confirm("この回を中断して設定画面に戻りますか？")) {
+        stopQuestionTimer();
         renderLifetimeStats();
         updatePoolInfo();
         showScreen("start-screen");

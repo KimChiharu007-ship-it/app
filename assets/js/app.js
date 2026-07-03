@@ -1216,6 +1216,30 @@
   // 選択肢オーバーレイ：指・マウスでも書き込むモード
   let annotateChoices = false;
 
+  // 道具（ペン/消しゴム）のUIを同期。ツールバー・浮動トグルボタンを更新
+  function updateToolUI() {
+    const t = penSettings.tool;
+    $$("#sketch-card .tool").forEach((b) => b.classList.toggle("active", b.dataset.tool === t));
+    const tog = $("#tool-toggle");
+    if (tog) {
+      const eraser = t === "eraser";
+      tog.classList.toggle("eraser", eraser);
+      tog.textContent = eraser ? "◧ 消しゴム" : "✏️ ペン";
+    }
+  }
+  function setTool(t) {
+    penSettings.tool = t;
+    updateToolUI();
+  }
+  function toggleTool() {
+    setTool(penSettings.tool === "eraser" ? "pen" : "eraser");
+  }
+  function setColor(c) {
+    penSettings.color = c;
+    if (penSettings.tool === "eraser") setTool("pen");
+    $$("#pen-colors .swatch").forEach((s) => s.classList.toggle("active", s.dataset.color === c));
+  }
+
   function makeSketch(opts) {
     // opts: { canvas, target, storeKey, shouldDraw, noDrawSelector }
     const canvas = opts.canvas;
@@ -1428,15 +1452,19 @@
         if (choicePad) choicePad.resize();
       });
 
-      function setTool(t) {
-        penSettings.tool = t;
-        $$("#sketch-card .tool").forEach((b) => b.classList.toggle("active", b.dataset.tool === t));
-      }
-      function setColor(c) {
-        penSettings.color = c;
-        if (penSettings.tool === "eraser") setTool("pen");
-        $$("#pen-colors .swatch").forEach((s) => s.classList.toggle("active", s.dataset.color === c));
-      }
+      // キャンバス上の大きな「ペン⇄消しゴム」トグル
+      $("#tool-toggle").addEventListener("click", toggleTool);
+
+      // キーボード P=ペン / E=消しゴム（入力中は無効）
+      document.addEventListener("keydown", (e) => {
+        if ($("#quiz-screen").classList.contains("hidden")) return;
+        const tag = (e.target.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "textarea" || e.target.isContentEditable) return;
+        if (e.key === "p" || e.key === "P") setTool("pen");
+        else if (e.key === "e" || e.key === "E") setTool("eraser");
+      });
+
+      updateToolUI();
     },
 
     // 問題の切り替え時に両描画面を対象問題へ

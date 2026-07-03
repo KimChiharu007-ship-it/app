@@ -347,6 +347,13 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; fo
 .question-card.annotating { cursor: crosshair; }
 .question-card.annotating .choices .choice { cursor: crosshair; }
 
+/* 描画対象（問題文・画像・選択肢）の上ではスクロール/ズームを無効化し、
+   ペン・指での書き込み中に画面が動かないようにする。タップ選択は有効なまま。
+   スクロールはヘッダー・カード余白・操作ボタン列・メモ欄以外の領域で可能。 */
+.question-card .q-stem,
+.question-card .q-figure,
+.question-card .choices { touch-action: none; }
+
 .annotate-tools {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin: 0 0 14px; position: relative; z-index: 6;

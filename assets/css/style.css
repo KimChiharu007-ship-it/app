@@ -135,6 +135,39 @@ select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; fo
 .stat.ok .num { color: var(--ok); }
 .stat.ng .num { color: var(--ng); }
 
+/* ---------- 今日の目標・ごほうびゲート ---------- */
+.gate-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.gate-head h2 { margin: 0; }
+.goal-set { font-size: .85rem; font-weight: 600; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 6px; }
+.goal-set input { width: 60px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; text-align: right; }
+
+.gate-bar { height: 12px; background: var(--line); border-radius: 999px; overflow: hidden; }
+.gate-bar > span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #2563eb, #16a34a); transition: width .35s; }
+.gate-text { margin: 8px 0 0; font-weight: 700; }
+.gate-text .done { color: var(--ok); }
+.gate-note { font-size: .8rem; color: var(--ink-soft); margin: 10px 0 12px; }
+
+.sns-links { display: flex; gap: 10px; flex-wrap: wrap; }
+.sns-btn {
+  flex: 1; min-width: 140px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 14px; border-radius: 12px;
+  font-weight: 700; text-decoration: none;
+  border: 1.5px solid var(--line);
+  color: var(--ink-soft); background: #f1f3f7;
+  cursor: not-allowed; user-select: none;
+}
+.sns-btn.unlocked {
+  cursor: pointer;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #ec4899);
+  border-color: transparent;
+  box-shadow: var(--shadow);
+}
+.sns-btn.unlocked .sns-lock { display: none; }
+.sns-btn.unlocked::after { content: "↗"; font-weight: 700; }
+.sns-btn .sns-lock { font-size: 1rem; }
+
 /* ---------- Quiz ---------- */
 .quiz-topbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
 .progress-wrap { flex: 1; min-width: 180px; }

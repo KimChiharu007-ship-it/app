@@ -33,7 +33,9 @@
     correct: 0,
     wrong: 0,
     forbiddenHits: 0,
-    reviewIds: [] // 要復習の問題ID
+    reviewIds: [], // 要復習の問題ID
+    dailyGoal: 10, // 今日のノルマ（SNS解除の条件）
+    daily: { date: "", count: 0 } // 当日の解答数
   });
 
   function loadStore() {
@@ -178,7 +180,25 @@
     $("#start-btn").addEventListener("click", startSession);
     $("#reset-stats").addEventListener("click", resetProgress);
 
+    // 今日の目標（ノルマ）設定とSNSごほうびゲート
+    $("#goal-input").addEventListener("change", (e) => {
+      const n = parseInt(e.target.value, 10);
+      store.dailyGoal = (n >= 1 && n <= 100) ? n : 10;
+      saveStore(store);
+      renderGate();
+    });
+    $$("#sns-links .sns-btn").forEach((a) => {
+      a.addEventListener("click", (e) => {
+        if (!a.classList.contains("unlocked")) {
+          e.preventDefault();
+          const remain = Math.max(0, (store.dailyGoal || 10) - ensureDaily());
+          alert("まだ解除されていません。あと " + remain + " 問 解きましょう。");
+        }
+      });
+    });
+
     renderLifetimeStats();
+    renderGate();
     updatePoolInfo();
   }
 
@@ -368,6 +388,9 @@
     if (!isCorrect || pickedForbidden) addReview(q.id);
     else removeReview(q.id);
 
+    // 今日のノルマ（SNS解除の条件）を加算
+    bumpDaily();
+
     // 生涯成績更新
     store.answered++;
     if (isCorrect) store.correct++; else store.wrong++;
@@ -532,6 +555,44 @@
     }
   }
 
+  /* ---------- 今日の目標・ごほうびゲート ---------- */
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
+      "-" + String(d.getDate()).padStart(2, "0");
+  }
+  // 日付が変わっていたらカウントをリセットして当日の解答数を返す
+  function ensureDaily() {
+    if (!store.daily || store.daily.date !== todayStr()) {
+      store.daily = { date: todayStr(), count: 0 };
+      saveStore(store);
+    }
+    return store.daily.count;
+  }
+  function bumpDaily() {
+    ensureDaily();
+    store.daily.count++;
+    saveStore(store);
+  }
+  function renderGate() {
+    const count = ensureDaily();
+    const goal = Math.max(1, store.dailyGoal || 10);
+    const pct = Math.min(100, Math.round((count / goal) * 100));
+    $("#gate-bar-fill").style.width = pct + "%";
+    const unlocked = count >= goal;
+    const remain = Math.max(0, goal - count);
+    $("#gate-text").innerHTML = unlocked
+      ? `<span class="done">✔ 今日のノルマ達成（${count}/${goal}問）！SNSを解除しました</span>`
+      : `今日 ${count} / ${goal} 問　（あと <b>${remain}</b> 問でSNS解除）`;
+    const goalInput = $("#goal-input");
+    if (goalInput && document.activeElement !== goalInput) goalInput.value = goal;
+    $$("#sns-links .sns-btn").forEach((a) => {
+      a.classList.toggle("unlocked", unlocked);
+      if (unlocked) a.setAttribute("href", a.dataset.url);
+      else a.removeAttribute("href");
+    });
+  }
+
   function renderLifetimeStats() {
     const rate = store.answered ? Math.round((store.correct / store.answered) * 100) : 0;
     $("#lifetime-stats").innerHTML = `
@@ -578,12 +639,14 @@
       if (confirm("この回を中断して設定画面に戻りますか？")) {
         stopQuestionTimer();
         renderLifetimeStats();
+        renderGate();
         updatePoolInfo();
         showScreen("start-screen");
       }
     });
     $("#home-btn").addEventListener("click", () => {
       renderLifetimeStats();
+      renderGate();
       updatePoolInfo();
       showScreen("start-screen");
     });
@@ -594,6 +657,7 @@
     $("#q-image").addEventListener("click", () => Lightbox.open($("#q-image").src, $("#q-image").alt));
     $("#editor-home-btn").addEventListener("click", () => {
       renderLifetimeStats();
+      renderGate();
       updatePoolInfo();
       showScreen("start-screen");
     });

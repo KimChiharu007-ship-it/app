@@ -64,6 +64,28 @@
         <button id="open-editor-btn" class="btn ghost big" style="margin-top:10px">＋ 自分の問題を作成・管理</button>
       </div>
 
+      <div class="card gate-card">
+        <div class="gate-head">
+          <h2>今日の目標とごほうび</h2>
+          <label class="goal-set">今日のノルマ
+            <input type="number" id="goal-input" min="1" max="100" value="10" /> 問
+          </label>
+        </div>
+        <div class="gate-progress">
+          <div class="gate-bar"><span id="gate-bar-fill"></span></div>
+          <p id="gate-text" class="gate-text"></p>
+        </div>
+        <p class="gate-note">今日のノルマを解くと、下のSNSリンクが解除されます（自分ルールの後押し）。</p>
+        <div class="sns-links" id="sns-links">
+          <a class="sns-btn" data-url="https://www.instagram.com/" target="_blank" rel="noopener">
+            <span class="sns-name">Instagram</span><span class="sns-lock">🔒</span>
+          </a>
+          <a class="sns-btn" data-url="https://x.com/" target="_blank" rel="noopener">
+            <span class="sns-name">X（旧Twitter）</span><span class="sns-lock">🔒</span>
+          </a>
+        </div>
+      </div>
+
       <div class="card stats-card">
         <h2>これまでの成績</h2>
         <div id="lifetime-stats" class="stat-grid"></div>
